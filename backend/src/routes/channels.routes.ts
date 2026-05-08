@@ -4,10 +4,13 @@ import { prisma } from '../db/prisma.js';
 import { AuthedRequest, isAdmin, requireAuth, requireChannelRole } from '../auth/guards.js';
 
 const channelsRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/api/channels', { preHandler: requireAuth }, async (req) =>
-    prisma.channel.findMany({ where: isAdmin((req as AuthedRequest).session.role as Role) ? {} : { id: { in: Object.keys((req as AuthedRequest).session.channelRoles) } } })
-  );
-
+  app.get('/api/channels', { preHandler: requireAuth }, async (req) => {
+    const authed = req as AuthedRequest;
+    const channels = await prisma.channel.findMany({
+      where: isAdmin(authed.session.role as Role) ? {} : { id: { in: Object.keys(authed.session.channelRoles) } }
+    });
+    return channels.map((channel) => ({ ...channel, role: authed.session.channelRoles[channel.id] || authed.session.role }));
+  });
 
   app.post('/api/channels', { preHandler: requireAuth }, async (req: any, rep) => {
     if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
