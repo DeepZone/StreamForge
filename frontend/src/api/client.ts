@@ -2,7 +2,7 @@ const configuredApiUrl = import.meta.env.VITE_API_URL?.trim() ?? '';
 
 function resolveApiBase(): string {
   if (!configuredApiUrl) {
-    return '';
+    return window.location.origin;
   }
 
   try {

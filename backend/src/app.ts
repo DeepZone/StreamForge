@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import { z } from 'zod';
 import { env } from './config/env.js';
 import setupRoutes from './routes/setup.routes.js';
 import authRoutes from './routes/auth.routes.js';
@@ -12,36 +13,26 @@ import adminRoutes from './routes/admin.routes.js';
 import communityRoutes from './routes/community.routes.js';
 import recapsRoutes from './routes/recaps.routes.js';
 
-const app = Fastify();
+const app = Fastify({ trustProxy: env.trustProxy, bodyLimit: 256 * 1024, disableRequestLogging: true });
 app.register(cookie, { secret: env.sessionSecret });
+const allowedOrigins = new Set(env.nodeEnv === 'production' ? env.allowedOrigins : [...env.allowedOrigins, 'http://localhost:4173', 'http://127.0.0.1:4173', env.frontendUrl, env.publicAppUrl]);
+app.register(cors, { credentials: true, origin: (origin, cb) => { if (!origin || allowedOrigins.has(origin)) { cb(null, true); return; } cb(new Error('origin_forbidden'), false); } });
 
-const allowedOrigins = new Set([
-  env.frontendUrl,
-  'http://192.168.58.158:4173',
-  'https://www.streamforge-bot.com',
-  'http://www.streamforge-bot.com',
-  'https://streamforge-bot.com',
-  'http://streamforge-bot.com'
-]);
-app.register(cors, {
-  credentials: true,
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.has(origin)) {
-      callback(null, true);
-      return;
-    }
-    callback(new Error('Origin not allowed'), false);
+const loginSchema = z.object({ email: z.string().email().max(320), password: z.string().min(1).max(128) }).strict();
+const setupSchema = z.object({ displayName: z.string().min(2).max(64), email: z.string().email().max(320), password: z.string().min(12).max(128) }).strict();
+
+app.addHook('preValidation', async (req, rep) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && env.nodeEnv === 'production') {
+    const origin = req.headers.origin;
+    if (origin && !allowedOrigins.has(origin)) return rep.code(403).send({ errorCode: 'csrf.origin_forbidden', requestId: req.id });
   }
+  if (req.method === 'POST' && req.url === '/api/auth/login') { const ok = loginSchema.safeParse(req.body); if (!ok.success) return rep.code(400).send({ errorCode: 'validation.failed', requestId: req.id, details: ok.error.issues.map((x) => ({ field: x.path.join('.'), message: x.message })) }); }
+  if (req.method === 'POST' && req.url === '/api/setup/create-owner') { const ok = setupSchema.safeParse(req.body); if (!ok.success) return rep.code(400).send({ errorCode: 'validation.failed', requestId: req.id, details: ok.error.issues.map((x) => ({ field: x.path.join('.'), message: x.message })) }); }
 });
 
-app.register(setupRoutes);
-app.register(authRoutes);
-app.register(channelsRoutes);
-app.register(commandsRoutes);
-app.register(timersRoutes);
-app.register(campaignsRoutes);
-app.register(adminRoutes);
-app.register(communityRoutes);
-app.register(recapsRoutes);
+app.addHook('onSend', async (_req, rep) => { rep.header('X-Content-Type-Options', 'nosniff'); rep.header('Referrer-Policy', 'no-referrer'); rep.header('X-Frame-Options', 'DENY'); rep.header('Cross-Origin-Resource-Policy', 'same-site'); if (env.nodeEnv === 'production') rep.header('Strict-Transport-Security', 'max-age=15552000; includeSubDomains; preload'); });
+app.setNotFoundHandler((req, rep) => rep.code(404).send({ errorCode: 'route.not_found', requestId: req.id }));
+app.setErrorHandler((err, req, rep) => { if ((err as any).statusCode === 413) return rep.code(413).send({ errorCode: 'request.payload_too_large', requestId: req.id }); if (err.code === 'FST_ERR_CTP_INVALID_JSON_BODY') return rep.code(400).send({ errorCode: 'request.invalid_json', requestId: req.id }); if (err.message === 'origin_forbidden') return rep.code(403).send({ errorCode: 'cors.origin_forbidden', requestId: req.id }); rep.code((err as any).statusCode || 500).send({ errorCode: 'internal.error', requestId: req.id }); });
 
+app.register(setupRoutes); app.register(authRoutes); app.register(channelsRoutes); app.register(commandsRoutes); app.register(timersRoutes); app.register(campaignsRoutes); app.register(adminRoutes); app.register(communityRoutes); app.register(recapsRoutes);
 export default app;
