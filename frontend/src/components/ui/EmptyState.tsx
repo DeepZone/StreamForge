@@ -1,0 +1,1 @@
+import Card from './Card'; export default function EmptyState({title,description}:{title:string;description:string}){return <Card className='p-6 text-center'><h3 className='font-semibold'>{title}</h3><p className='text-zinc-400 text-sm mt-1'>{description}</p></Card>}

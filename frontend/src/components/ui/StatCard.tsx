@@ -1,0 +1,1 @@
+import Card from './Card'; export default function StatCard({label,value}:{label:string;value:string|number}){return <Card className='p-4'><div className='text-xs text-zinc-400'>{label}</div><div className='text-2xl font-semibold mt-1'>{value}</div></Card>}

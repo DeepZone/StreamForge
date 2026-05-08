@@ -1,0 +1,2 @@
+import Button from './Button';
+export default function ErrorBox({message,details}:{message:string;details?:unknown}){const txt=details?JSON.stringify(details,null,2):'';return <div className='rounded-xl border border-rose-800 bg-rose-950/40 p-3 text-rose-200 text-sm'>{message}{txt&&<div className='mt-2'><Button variant='ghost' onClick={()=>navigator.clipboard.writeText(txt)}>Debug kopieren</Button></div>}</div>}

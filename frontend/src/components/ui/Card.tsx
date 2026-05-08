@@ -1,1 +1,1 @@
-export const Card=(props:any)=><div {...props}/>;
+import { HTMLAttributes } from 'react'; import { cx } from './utils'; export default function Card({className,...props}:HTMLAttributes<HTMLDivElement>){return <div {...props} className={cx('rounded-xl border bg-zinc-900/80 shadow-lg shadow-black/20',className)} />}

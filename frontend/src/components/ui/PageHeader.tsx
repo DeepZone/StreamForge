@@ -1,0 +1,1 @@
+export default function PageHeader({title,subtitle,actions}:{title:string;subtitle?:string;actions?:React.ReactNode}){return <div className='flex flex-wrap items-center justify-between gap-3'><div><h1 className='text-2xl font-semibold'>{title}</h1>{subtitle&&<p className='text-zinc-400 text-sm'>{subtitle}</p>}</div>{actions}</div>}

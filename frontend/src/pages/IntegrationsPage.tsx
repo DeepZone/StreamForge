@@ -1,3 +1,2 @@
-export default function IntegrationsPage() {
-  return <div className='space-y-2'><h1 className='text-xl font-bold'>Integrationen</h1><p className='text-slate-300'>Integrationen (z. B. externe Dienste) sind noch nicht implementiert. Core-Channel-Funktionen stehen bereits bereit.</p></div>;
-}
+import Card from '../components/ui/Card'; import PageHeader from '../components/ui/PageHeader';
+export default function IntegrationsPage(){return <div className='space-y-4'><PageHeader title='Integrationen' subtitle='Externe Services und Webhooks konfigurieren.'/><Card className='p-5 text-zinc-300'>Noch nicht im MVP implementiert (inkl. Discord).</Card></div>}
