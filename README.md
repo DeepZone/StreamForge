@@ -229,3 +229,30 @@ Das Dashboard ist jetzt als dunkles SaaS-UI über `/channels` erreichbar.
 - Production (reverse proxy): `VITE_API_URL=https://www.streamforge-bot.com`
 - Local LAN: `VITE_API_URL=http://192.168.58.158:8000`
 - If `VITE_API_URL` is empty, frontend now defaults to current origin (same-domain mode).
+
+## Twitch OAuth Callback Fehlerdiagnose
+
+### Schnellchecks
+
+```bash
+curl -i https://www.streamforge-bot.com/api/auth/twitch/start
+docker compose logs backend --tail=150
+docker compose exec backend printenv | grep -E 'TWITCH|TOKEN|PUBLIC|FRONTEND|BACKEND'
+```
+
+### Häufige Fehlercodes
+
+- `twitch.oauth.invalid_state`  
+  Ursache: Cookie/Session/Domain/SameSite/Reverse-Proxy-Konfiguration verhindert konsistente OAuth-Session.
+- `twitch.oauth.token_exchange_failed`  
+  Ursache: Redirect URI stimmt nicht exakt mit der Twitch Developer Console überein oder Client Secret ist falsch.
+- `twitch.oauth.token_encryption_failed`  
+  Ursache: `TOKEN_ENCRYPTION_KEY` fehlt oder hat nicht exakt 64 Hex-Zeichen (`openssl rand -hex 32`).
+- `twitch.oauth.persistence_failed`  
+  Ursache: Prisma/DB/Unique-Constraint/Schema-Problem.
+- `twitch.oauth.userinfo_failed`  
+  Ursache: Access Token ungültig oder Twitch API Fehler.
+
+### EventSub Hinweis
+
+Für den ersten OAuth-Test `TWITCH_EVENTSUB_ENABLED=false` setzen. Erst nach erfolgreichem Login und gespeicherten `TwitchToken` auf `true` umstellen und Backend neu starten.

@@ -19,6 +19,28 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     return true;
   };
 
+
+  app.get('/api/admin/twitch/config', { preHandler: requireAuth }, async (req, rep) => {
+    if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
+    const missingEnvVars = [
+      ['TWITCH_CLIENT_ID', env.twitchClientId],
+      ['TWITCH_CLIENT_SECRET', env.twitchClientSecret],
+      ['TWITCH_REDIRECT_URI', env.twitchRedirectUri],
+      ['TOKEN_ENCRYPTION_KEY', env.tokenKey]
+    ].filter(([, value]) => !value).map(([key]) => key);
+    return {
+      oauthConfigured: missingEnvVars.length === 0,
+      missingEnvVars,
+      redirectUri: env.twitchRedirectUri,
+      publicApiUrl: env.publicApiUrl,
+      publicAppUrl: env.publicAppUrl,
+      eventSubEnabled: env.twitchEventSubEnabled,
+      hasClientId: Boolean(env.twitchClientId),
+      hasClientSecret: Boolean(env.twitchClientSecret),
+      hasTokenEncryptionKey: Boolean(env.tokenKey),
+      scopes: ['chat:read', 'chat:edit', 'moderator:read:followers']
+    };
+  });
   app.post('/api/admin/twitch/sessions/start-all', { preHandler: requireAuth }, async (req, rep) => {
     const authed = req as AuthedRequest;
     if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
