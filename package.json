@@ -13,6 +13,9 @@
     "frontend:build": "npm --workspace frontend run build",
     "prisma:validate": "npm --workspace backend run prisma:validate",
     "prisma:generate": "npm --workspace backend run prisma:generate",
-    "docker:build": "docker compose build"
+    "docker:build": "docker compose build",
+    "validate:backend": "npm --workspace backend run prisma:format && npm --workspace backend run prisma:validate && npm --workspace backend run prisma:generate && npm --workspace backend run build",
+    "validate:frontend": "npm --workspace frontend run build",
+    "validate:all": "npm run validate:backend && npm run validate:frontend"
   }
 }

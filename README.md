@@ -8,7 +8,11 @@
 
 ## Lokale Validierung
 - Ausführung: `./scripts/validate-local.sh`
-- Das Skript führt aus: Backend install, Prisma generate/validate, Backend build, Frontend install/build, optional `docker compose build`.
+- Das Skript führt aus: Backend install, Prisma format/validate/generate, Backend build, Frontend install/build, optional `docker compose build`.
+- Alternativ über Root-Skripte:
+  - `npm run validate:backend`
+  - `npm run validate:frontend`
+  - `npm run validate:all`
 
 ## Lokaler Start (ohne Docker)
 1. `.env.example` nach `.env` kopieren.
@@ -68,8 +72,34 @@ TWITCH_CLIENT_SECRET=...
 TWITCH_REDIRECT_URI=http://localhost:8000/api/auth/twitch/callback
 FRONTEND_URL=http://localhost:5173
 BACKEND_URL=http://localhost:8000
-TOKEN_ENCRYPTION_KEY=<64-char-hex>
+TOKEN_ENCRYPTION_KEY=<genau-64-hex-zeichen>
 ```
+
+
+### TOKEN_ENCRYPTION_KEY erzeugen
+`TOKEN_ENCRYPTION_KEY` muss **genau 64 Hex-Zeichen** lang sein (32 Byte für AES-256-GCM).
+
+Beispiel:
+```bash
+openssl rand -hex 32
+```
+
+### Prisma Befehle (Backend)
+```bash
+npm run prisma:format
+npm run prisma:validate
+npm run prisma:generate
+npm run prisma:push
+```
+
+### Empfohlene lokale Reihenfolge
+1. `cd backend && npm install`
+2. `cd backend && npm run prisma:format`
+3. `cd backend && npm run prisma:validate`
+4. `cd backend && npm run prisma:generate`
+5. `cd backend && npm run build`
+6. `cd frontend && npm install`
+7. `cd frontend && npm run build`
 
 ### Twitch Developer Console
 1. In der Twitch Developer Console eine Application anlegen.
