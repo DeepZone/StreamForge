@@ -16,11 +16,17 @@ services:
     build: ./backend
     env_file: .env.example
     depends_on: [postgres, redis]
+    environment:
+      DATABASE_URL: postgresql://streamforge:streamforge@postgres:5432/streamforge?schema=public
+      REDIS_URL: redis://redis:6379
     ports: ["3000:3000"]
 
   frontend:
     build: ./frontend
     depends_on: [backend]
-    ports: ["5173:5173"]
+    environment:
+      VITE_API_URL: http://backend:3000
+    ports: ["4173:4173"]
+
 volumes:
   pg_data:

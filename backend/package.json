@@ -7,7 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "prisma:validate": "prisma validate"
   },
   "dependencies": {
     "@fastify/cookie": "^10.0.1",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "prisma": "^6.8.2",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.2"
   }
 }
