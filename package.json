@@ -1,0 +1,10 @@
+{
+  "name": "streamforge",
+  "private": true,
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "dev": "docker compose up --build",
+    "backend:dev": "npm --workspace backend run dev",
+    "frontend:dev": "npm --workspace frontend run dev"
+  }
+}
