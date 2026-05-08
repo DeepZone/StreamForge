@@ -133,3 +133,11 @@ Ein Teil ist bereits für spätere Chat-/EventSub-Schritte vorbereitet.
 3. Nach erfolgreichem Consent auf `/dashboard/channels/:channelId` landen.
 4. `GET /api/auth/me` prüfen: User + Channel-Rollen.
 5. `GET /api/channels` prüfen: nur erlaubte Channels außer für System-Admins.
+
+## Twitch EventSub MVP (Chat Commands)
+- Set `TWITCH_EVENTSUB_ENABLED=true` to start the Twitch EventSub websocket manager.
+- Required OAuth scopes for this MVP are centralized in `backend/src/twitch/scopes.ts` and include: `user:read:email`, `user:read:chat`, `user:write:chat`, `channel:bot`, `user:bot`.
+- After changing scopes, re-run Twitch OAuth for the channel so new scopes are granted and stored.
+- MVP token model: StreamForge uses the registered channel owner token for EventSub/chat API actions. For production, a dedicated bot account per platform/instance is recommended.
+- Quick test: login with Twitch, ensure channel is active + botEnabled, send `!ping` in that channel chat, verify message saved and `pong` sent back.
+- Common failures: missing scopes, expired token, `TWITCH_EVENTSUB_ENABLED=false`, invalid redirect URI, websocket disconnect/reconnect.

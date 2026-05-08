@@ -21,12 +21,14 @@
     "fastify": "^4.28.1",
     "ioredis": "^5.4.1",
     "nanoid": "^5.0.7",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "prisma": "^6.8.2",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
-    "@types/node": "^22.10.2"
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13"
   }
 }
