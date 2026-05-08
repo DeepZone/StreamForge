@@ -99,3 +99,18 @@ npm run prisma:push
 
 - Keine Secrets oder Tokens loggen.
 - Admin Health zeigt nur Statusdaten (z. B. `status`, `connected`, `subscribed`, `lastError`, Counter, Timestamps).
+
+## Community Radar, FAQ und Recaps (heuristisch, lokal)
+
+- **Community Radar API**: `GET /api/channels/:channelId/community/radar` liefert kanalgebundene Kennzahlen (Nachrichten, aktive Chatter, neue/wiederkehrende Viewer, potenzielle Moderationsunterstützung, Watchlist zur manuellen Prüfung).
+- **FAQ-Erkennung API**: `GET /api/channels/:channelId/community/faq` erkennt häufige Fragen über lokale Heuristiken (Fragezeichen, Normalisierung, Frequenzen).
+- **Command Suggestions API**: `GET /api/channels/:channelId/commands/suggestions` und `POST /api/channels/:channelId/commands/from-suggestion`.
+- **Recaps API**: `POST /api/channels/:channelId/recaps/generate`, `GET /api/channels/:channelId/recaps`, `GET /api/channels/:channelId/recaps/:recapId`.
+- **Wichtig**: alle Auswertungen sind ohne externe KI/API implementiert, rein heuristisch und lokal.
+
+### Datenschutz- und Sicherheits-Hinweise
+
+- Keine kanalübergreifenden Auswertungen oder Datenlecks.
+- Keine automatische Sanktion oder Moderationsentscheidung.
+- Keine Persönlichkeitsdiagnosen.
+- Watchlist/Potential-Moderatoren sind ausschließlich heuristische Hinweise zur manuellen Prüfung.
