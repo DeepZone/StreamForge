@@ -14,7 +14,7 @@ type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<AuthUser | null>;
   logout: () => Promise<void>;
 };
 
@@ -24,16 +24,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = async () => {
+  const refresh = async (): Promise<AuthUser | null> => {
     try {
       const me = await apiGet<AuthUser>('/api/auth/me');
       setUser(me);
+      return me;
     } catch (error: any) {
       if (error?.status === 401) {
         setUser(null);
-        return;
+        return null;
       }
       setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }

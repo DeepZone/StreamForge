@@ -17,7 +17,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await apiPost<{ ok: true }>('/api/auth/login', { email, password });
-      await refresh();
+      const me = await refresh();
+      if (!me) {
+        setError(`Login erfolgreich, aber keine Session aktiv. Prüfe Cookie-/HTTPS-Setup und API-Basis (${apiBase}).`);
+        return;
+      }
       navigate('/channels', { replace: true });
     } catch (err: any) {
       if (err?.status === 401) {
