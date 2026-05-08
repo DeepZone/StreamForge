@@ -202,3 +202,30 @@ Das Dashboard ist jetzt als dunkles SaaS-UI über `/channels` erreichbar.
 - Integrationen (MVP-Placeholder)
 - Moderation (MVP-Placeholder)
 - Settings (MVP-Placeholder)
+
+## Production Reverse Proxy & API Security Hardening
+
+- Public Domain: `https://www.streamforge-bot.com`
+- API Domain Path: `https://www.streamforge-bot.com/api`
+- Reverse Proxy routing: `/` -> frontend `192.168.58.158:4173`, `/api` -> backend `192.168.58.158:8000`.
+- Backend keeps internal routes as `/api/...`.
+- Required forwarded headers: `Host`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Real-IP`.
+- Set backend `TRUST_PROXY=true` in proxy deployments.
+- Cookie hardening: signed cookie, HttpOnly, Secure in production, SameSite=Lax (balanced CSRF protection with OAuth redirect compatibility).
+- Production CORS: strict allow-list via `ALLOWED_ORIGINS` (comma-separated), credentials enabled only for allowed origins.
+- Mutating requests in production require allowed `Origin` (CSRF origin check).
+- API body size limit is 256KB; invalid JSON and oversized payloads return structured API errors.
+- Campaign redirect `/c/:shortCode` is redirect-only (no server-side fetch), reducing SSRF exposure.
+
+### API Inventory (Security-focused)
+- Public: `/api/public/health`, `/c/:shortCode`
+- Auth: `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`, `/api/auth/twitch/*`
+- Setup: `/api/setup/status`, `/api/setup/create-owner`
+- Channel-scoped: `/api/channels/:channelId/*` (commands/timers/campaigns/community/recaps/logs)
+- Admin: `/api/admin/*`
+- Validation: write endpoints reject unknown fields for key auth/setup/commands/timers/campaigns flows.
+
+### Frontend API Base for Domainbetrieb
+- Production (reverse proxy): `VITE_API_URL=https://www.streamforge-bot.com`
+- Local LAN: `VITE_API_URL=http://192.168.58.158:8000`
+- If `VITE_API_URL` is empty, frontend now defaults to current origin (same-domain mode).
