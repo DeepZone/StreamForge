@@ -141,3 +141,36 @@ Ein Teil ist bereits für spätere Chat-/EventSub-Schritte vorbereitet.
 - MVP token model: StreamForge uses the registered channel owner token for EventSub/chat API actions. For production, a dedicated bot account per platform/instance is recommended.
 - Quick test: login with Twitch, ensure channel is active + botEnabled, send `!ping` in that channel chat, verify message saved and `pong` sent back.
 - Common failures: missing scopes, expired token, `TWITCH_EVENTSUB_ENABLED=false`, invalid redirect URI, websocket disconnect/reconnect.
+
+## Twitch Session Betriebssicherheit
+- StreamForge prüft vor Twitch-API-Aufrufen, ob `expiresAt` in unter 5 Minuten liegt, und führt dann automatisch einen OAuth Refresh aus.
+- Refresh schreibt neue Access-/Refresh-Tokens **verschlüsselt** zurück in `TwitchToken` und aktualisiert `expiresAt` + `scopesJson`.
+- Wenn der Refresh fehlschlägt, wird die Session auf `token_error` gesetzt, `lastError` befüllt und ein BotEvent `token_refresh_failed` geschrieben (ohne Secrets).
+- OAuth erneut erforderlich bei `auth_required`, beschädigter Token-Entschlüsselung oder dauerhaft ungültigem Refresh-Token.
+
+## Admin Twitch Session Controls
+- `POST /api/admin/twitch/sessions/start-all`
+- `POST /api/admin/twitch/sessions/stop-all`
+- `POST /api/admin/twitch/sessions/:channelId/start`
+- `POST /api/admin/twitch/sessions/:channelId/stop`
+- `POST /api/admin/twitch/sessions/:channelId/restart`
+- Erlaubt nur für `system_owner` und `platform_admin`.
+- Bei `TWITCH_EVENTSUB_ENABLED=false` antworten Start-Endpunkte mit `409 eventsub_disabled`.
+
+## Health Status Modell
+Session Statuswerte: `idle`, `starting`, `connected`, `subscribed`, `reconnecting`, `stopped`, `token_error`, `error`, `auth_required`.
+
+Admin Health enthält pro Session:
+- interne `channelId`
+- `twitchChannelId`, `twitchLogin`
+- `status`, `connected`, `subscribed`
+- `lastError`, `lastConnectedAt`, `lastMessageAt`, `lastSubscriptionAt`
+- `reconnectCount`, `subscriptionsCount`
+
+## Troubleshooting
+- `token_error`: Refresh fehlgeschlagen. OAuth im Channel erneut durchführen.
+- `auth_required`: Kein gültiges TwitchToken hinterlegt oder Token nicht entschlüsselbar.
+- `subscription_failed`: EventSub-Subscription konnte nicht erstellt werden (Scopes/Token/Session prüfen).
+- `missing scopes`: OAuth mit aktuellen Scopes erneut starten.
+- `EventSub disabled`: `TWITCH_EVENTSUB_ENABLED=true` setzen oder bewusst im Disabled-Modus bleiben.
+- `reconnecting`: WebSocket-Reconnect läuft; `reconnectCount` und `lastError` in Admin Health prüfen.
