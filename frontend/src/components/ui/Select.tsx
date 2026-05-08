@@ -1,0 +1,1 @@
+import { SelectHTMLAttributes } from 'react'; import { cx } from './utils'; export default function Select(p:SelectHTMLAttributes<HTMLSelectElement>){return <select {...p} className={cx('w-full rounded-lg border bg-zinc-950 px-3 py-2 text-sm',p.className)} />}

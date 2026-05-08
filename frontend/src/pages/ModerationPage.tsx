@@ -1,3 +1,2 @@
-export default function ModerationPage() {
-  return <div className='space-y-2'><h1 className='text-xl font-bold'>Moderation</h1><p className='text-slate-300'>Dieses Modul ist als MVP vorbereitet. Moderations-Aktionen und Notizen folgen in einem nächsten Schritt.</p></div>;
-}
+import Card from '../components/ui/Card'; import PageHeader from '../components/ui/PageHeader';
+export default function ModerationPage(){return <div className='space-y-4'><PageHeader title='Moderation' subtitle='Moderationsregeln und Automationen pro Channel.'/><Card className='p-5 text-zinc-300'>Noch nicht im MVP implementiert.</Card></div>}

@@ -169,3 +169,36 @@ curl -i --cookie cookies.txt --cookie-jar cookies.txt http://192.168.58.158:8000
   - `/admin/health`
 - Aktuell nutzbar (MVP): Dashboard-Übersicht, Commands CRUD, Timers CRUD, Campaigns CRUD, Community Radar, Recaps, Admin Health.
 - Noch MVP/Platzhalter mit Erklärung: Moderation, Integrationen, Settings.
+
+## Modern Dashboard (Frontend)
+
+Das Dashboard ist jetzt als dunkles SaaS-UI über `/channels` erreichbar.
+
+### Routen
+- `/setup`
+- `/login`
+- `/channels`
+- `/dashboard/channels/:channelId`
+- `/dashboard/channels/:channelId/commands`
+- `/dashboard/channels/:channelId/timers`
+- `/dashboard/channels/:channelId/community`
+- `/dashboard/channels/:channelId/recaps`
+- `/dashboard/channels/:channelId/campaigns`
+- `/dashboard/channels/:channelId/moderation`
+- `/dashboard/channels/:channelId/integrations`
+- `/dashboard/channels/:channelId/settings`
+- `/admin/health`
+
+### Nutzbar im MVP
+- Commands
+- Timer
+- Community Radar
+- Recaps
+- Campaigns
+- Admin Health
+
+### Noch nicht fertig
+- Discord
+- Integrationen (MVP-Placeholder)
+- Moderation (MVP-Placeholder)
+- Settings (MVP-Placeholder)

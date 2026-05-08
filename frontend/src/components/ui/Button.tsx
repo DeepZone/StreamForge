@@ -1,1 +1,3 @@
-export const Button=(props:any)=><div {...props}/>;
+import { ButtonHTMLAttributes } from 'react'; import { cx } from './utils';
+type Variant='primary'|'secondary'|'danger'|'ghost';
+export default function Button({ className, variant='primary', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) { const map:Record<Variant,string>={primary:'bg-indigo-600 hover:bg-indigo-500 text-white',secondary:'bg-zinc-800 hover:bg-zinc-700 text-zinc-100',danger:'bg-rose-700 hover:bg-rose-600 text-white',ghost:'hover:bg-zinc-800 text-zinc-300'}; return <button {...props} className={cx('rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50', map[variant], className)} /> }
