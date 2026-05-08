@@ -25,7 +25,7 @@ export default function LoginPage() {
       } else if (err?.status === 400) {
         setError(err?.data?.error ?? 'Bitte alle Pflichtfelder korrekt ausfüllen.');
       } else {
-        setError('Login ist aktuell nicht erreichbar. Bitte Backend und API-URL prüfen.');
+        setError(`Login ist aktuell nicht erreichbar. API-Basis: ${apiBase}. Bitte Backend-Status und VITE_API_URL prüfen.`);
       }
     } finally {
       setLoading(false);
