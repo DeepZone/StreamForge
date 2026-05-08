@@ -9,6 +9,8 @@ import commandsRoutes from './routes/commands.routes.js';
 import timersRoutes from './routes/timers.routes.js';
 import campaignsRoutes from './routes/campaigns.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import communityRoutes from './routes/community.routes.js';
+import recapsRoutes from './routes/recaps.routes.js';
 
 const app = Fastify();
 app.register(cookie, { secret: env.sessionSecret });
@@ -21,5 +23,7 @@ app.register(commandsRoutes);
 app.register(timersRoutes);
 app.register(campaignsRoutes);
 app.register(adminRoutes);
+app.register(communityRoutes);
+app.register(recapsRoutes);
 
 export default app;
