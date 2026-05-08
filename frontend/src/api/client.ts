@@ -1,4 +1,4 @@
-export const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+export const apiBase = (import.meta.env.VITE_API_URL || 'http://192.168.58.158:8000').replace(/\/$/, '');
 
 type ApiMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
