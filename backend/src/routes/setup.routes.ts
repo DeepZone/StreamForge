@@ -9,11 +9,17 @@ const setupRoutes: FastifyPluginAsync = async (app) => {
   }));
 
   app.post('/api/setup/create-owner', async (req: any, rep) => {
+    const email = typeof req?.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req?.body?.password === 'string' ? req.body.password : '';
+    const displayName = typeof req?.body?.displayName === 'string' ? req.body.displayName.trim() : '';
+    if (!displayName) return rep.code(400).send({ error: 'display_name_required' });
+    if (!email) return rep.code(400).send({ error: 'email_required' });
+    if (!password) return rep.code(400).send({ error: 'password_required' });
     try {
       const result = await prisma.$transaction(async (tx) => {
         const exists = await tx.user.findFirst({ where: { isLocalAdmin: true, members: { some: { role: 'system_owner' } } } });
         if (exists) return null;
-        const user = await tx.user.create({ data: { email: req.body.email.toLowerCase(), passwordHash: await hashPassword(req.body.password), displayName: req.body.displayName, isLocalAdmin: true } });
+        const user = await tx.user.create({ data: { email: email, passwordHash: await hashPassword(password), displayName: displayName, isLocalAdmin: true } });
         const channel = await tx.channel.create({ data: { twitchChannelId: `sys-${user.id}`, twitchLogin: `system-${user.id.slice(-6)}`, displayName: 'System' } });
         await tx.channelMember.create({ data: { channelId: channel.id, userId: user.id, role: 'system_owner' } });
         return { user, channel };

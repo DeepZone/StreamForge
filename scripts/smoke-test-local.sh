@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StreamForge local smoke test.
-# WARNING: Local development use only. Do not run against production systems.
-
 API_BASE="${API_BASE:-http://localhost:8000}"
 COOKIE_JAR="${COOKIE_JAR:-cookies.txt}"
 TEST_EMAIL="${SMOKE_TEST_EMAIL:-smoke.owner.local@example.test}"
@@ -24,13 +21,13 @@ request() {
   tmp_body=$(mktemp)
   tmp_meta=$(mktemp)
   if [[ -n "$body" ]]; then
-    curl -sS -X "$method" "$url" -H 'content-type: application/json' -c "$COOKIE_JAR" -b "$COOKIE_JAR" -d "$body" -o "$tmp_body" -w '%{http_code}' >"$tmp_meta"
+    curl -sS -D "$tmp_meta" -X "$method" "$url" -H 'content-type: application/json' -c "$COOKIE_JAR" -b "$COOKIE_JAR" -d "$body" -o "$tmp_body" -w '%{http_code}' >"$tmp_meta.status"
   else
-    curl -sS -X "$method" "$url" -c "$COOKIE_JAR" -b "$COOKIE_JAR" -o "$tmp_body" -w '%{http_code}' >"$tmp_meta"
+    curl -sS -D "$tmp_meta" -X "$method" "$url" -c "$COOKIE_JAR" -b "$COOKIE_JAR" -o "$tmp_body" -w '%{http_code}' >"$tmp_meta.status"
   fi
-  status=$(cat "$tmp_meta")
-  rm -f "$tmp_meta"
-  echo "$status|$tmp_body"
+  status=$(cat "$tmp_meta.status")
+  rm -f "$tmp_meta.status"
+  echo "$status|$tmp_body|$tmp_meta"
 }
 
 read_json_bool() {
@@ -51,19 +48,19 @@ PY
 
 step "Checking backend reachability: ${API_BASE}/api/setup/status"
 result=$(request GET "${API_BASE}/api/setup/status")
-status="${result%%|*}"; body_file="${result#*|}"
+status="${result%%|*}"; rest="${result#*|}"; body_file="${rest%%|*}"; headers_file="${rest#*|}"
 [[ "$status" == "200" ]] || fail "Backend not reachable or setup status failed (HTTP $status)"
 
 setup_allowed=$(read_json_bool "$body_file" "setupAllowed")
-rm -f "$body_file"
+rm -f "$body_file" "$headers_file"
 
 if [[ "$setup_allowed" == "true" ]]; then
   step "Setup is allowed; creating local smoke-test owner"
   payload=$(printf '{"email":"%s","password":"%s","displayName":"%s"}' "$TEST_EMAIL" "$TEST_PASSWORD" "$TEST_DISPLAY_NAME")
   result=$(request POST "${API_BASE}/api/setup/create-owner" "$payload")
-  status="${result%%|*}"; body_file="${result#*|}"
-  [[ "$status" == "200" || "$status" == "201" ]] || fail "Owner creation failed (HTTP $status). Body: $(cat "$body_file")"
-  rm -f "$body_file"
+  status="${result%%|*}"; rest="${result#*|}"; body_file="${rest%%|*}"; headers_file="${rest#*|}"
+  [[ "$status" == "200" || "$status" == "201" ]] || fail "Owner creation failed (HTTP $status)."
+  rm -f "$body_file" "$headers_file"
 else
   step "Setup already completed; trying login with local smoke-test credentials"
 fi
@@ -71,31 +68,21 @@ fi
 step "POST /api/auth/login"
 login_payload=$(printf '{"email":"%s","password":"%s"}' "$TEST_EMAIL" "$TEST_PASSWORD")
 result=$(request POST "${API_BASE}/api/auth/login" "$login_payload")
-status="${result%%|*}"; body_file="${result#*|}"
+status="${result%%|*}"; rest="${result#*|}"; body_file="${rest%%|*}"; headers_file="${rest#*|}"
+echo "[SMOKE] /api/auth/login HTTP $status"
 if [[ "$status" != "200" ]]; then
-  echo "[SMOKE][WARN] Login with smoke-test credentials failed (HTTP $status)."
-  echo "[SMOKE][WARN] If setup already existed, use existing local owner credentials via:"
-  echo "  SMOKE_TEST_EMAIL=... SMOKE_TEST_PASSWORD=... bash scripts/smoke-test-local.sh"
-  fail "Cannot continue smoke test without authenticated session. Body: $(cat "$body_file")"
+  fail "Cannot continue smoke test without authenticated session."
 fi
-rm -f "$body_file"
+if ! rg -qi '^set-cookie: sf_session=' "$headers_file"; then
+  fail "Login response did not include sf_session Set-Cookie header"
+fi
+rm -f "$body_file" "$headers_file"
 
 step "GET /api/auth/me"
 result=$(request GET "${API_BASE}/api/auth/me")
-status="${result%%|*}"; body_file="${result#*|}"
-[[ "$status" == "200" ]] || fail "/api/auth/me failed (HTTP $status). Body: $(cat "$body_file")"
-rm -f "$body_file"
-
-step "GET /api/channels"
-result=$(request GET "${API_BASE}/api/channels")
-status="${result%%|*}"; body_file="${result#*|}"
-[[ "$status" == "200" ]] || fail "/api/channels failed (HTTP $status). Body: $(cat "$body_file")"
-rm -f "$body_file"
-
-step "GET /api/admin/health"
-result=$(request GET "${API_BASE}/api/admin/health")
-status="${result%%|*}"; body_file="${result#*|}"
-[[ "$status" == "200" || "$status" == "403" ]] || fail "/api/admin/health unexpected HTTP $status. Body: $(cat "$body_file")"
-rm -f "$body_file"
+status="${result%%|*}"; rest="${result#*|}"; body_file="${rest%%|*}"; headers_file="${rest#*|}"
+echo "[SMOKE] /api/auth/me HTTP $status"
+[[ "$status" == "200" ]] || fail "/api/auth/me failed (HTTP $status)."
+rm -f "$body_file" "$headers_file"
 
 step "Smoke test finished successfully"

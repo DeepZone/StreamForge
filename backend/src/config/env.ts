@@ -19,7 +19,7 @@ export const env = {
   port: Number(process.env.PORT || 8000),
   dbUrl: process.env.DATABASE_URL || '',
   sessionSecret,
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:4173',
   backendUrl: process.env.BACKEND_URL || 'http://localhost:8000',
   twitchClientId: process.env.TWITCH_CLIENT_ID || '',
   twitchClientSecret: process.env.TWITCH_CLIENT_SECRET || '',

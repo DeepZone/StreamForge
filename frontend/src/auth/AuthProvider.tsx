@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { apiBase } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 
 type AuthUser = {
   id: string;
@@ -11,7 +11,14 @@ type AuthUser = {
   channels: Array<{ channelId: string; role: string }>;
 };
 
-const AuthContext = createContext<any>(null);
+type AuthContextValue = {
+  user: AuthUser | null;
+  loading: boolean;
+  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -19,23 +26,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refresh = async () => {
     try {
-      const res = await fetch(`${apiBase}/api/auth/me`, { credentials: 'include' });
-      if (!res.ok) {
+      const me = await apiGet<AuthUser>('/api/auth/me');
+      setUser(me);
+    } catch (error: any) {
+      if (error?.status === 401) {
         setUser(null);
-      } else {
-        setUser(await res.json());
+        return;
       }
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
 
   const logout = async () => {
-    await fetch(`${apiBase}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    await apiPost<{ ok: true }>('/api/auth/logout');
     setUser(null);
   };
 
@@ -43,4 +52,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+};

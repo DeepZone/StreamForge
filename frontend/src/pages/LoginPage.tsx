@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
-import { apiBase } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import { useNavigate } from 'react-router-dom';
+import { apiBase, apiPost } from '../api/client';
 
 export default function LoginPage() {
   const { refresh } = useAuth();
@@ -16,20 +16,17 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${apiBase}/api/auth/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      if (!res.ok) {
-        setError('Login fehlgeschlagen. Bitte E-Mail/Passwort prüfen.');
-        return;
-      }
+      await apiPost<{ ok: true }>('/api/auth/login', { email, password });
       await refresh();
-      navigate('/channels');
-    } catch {
-      setError('Login ist aktuell nicht erreichbar.');
+      navigate('/channels', { replace: true });
+    } catch (err: any) {
+      if (err?.status === 401) {
+        setError('E-Mail oder Passwort ist falsch.');
+      } else if (err?.status === 400) {
+        setError(err?.data?.error ?? 'Bitte alle Pflichtfelder korrekt ausfüllen.');
+      } else {
+        setError('Login ist aktuell nicht erreichbar. Bitte Backend und API-URL prüfen.');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,9 +40,7 @@ export default function LoginPage() {
         if (location) window.location.href = location;
         return;
       }
-      if (!res.ok) {
-        setError('Twitch OAuth ist im Backend nicht korrekt konfiguriert.');
-      }
+      if (!res.ok) setError('Twitch OAuth ist im Backend nicht korrekt konfiguriert.');
     } catch {
       setError('Twitch OAuth ist aktuell nicht erreichbar.');
     }
@@ -54,42 +49,25 @@ export default function LoginPage() {
   return (
     <div className='p-6 space-y-6 max-w-md'>
       <h1 className='text-2xl font-semibold'>Login</h1>
-
       <form className='space-y-3 rounded border border-slate-700 bg-slate-900 p-4' onSubmit={loginLocal}>
         <h2 className='text-lg font-medium'>Lokaler Admin-Login</h2>
         <label className='block space-y-1'>
           <span className='text-sm text-slate-300'>E-Mail</span>
-          <input
-            type='email'
-            className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100'
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete='username'
-            required
-          />
+          <input type='email' className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100' value={email} onChange={(e) => setEmail(e.target.value)} autoComplete='username' required />
         </label>
         <label className='block space-y-1'>
           <span className='text-sm text-slate-300'>Passwort</span>
-          <input
-            type='password'
-            className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100'
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete='current-password'
-            required
-          />
+          <input type='password' className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100' value={password} onChange={(e) => setPassword(e.target.value)} autoComplete='current-password' required />
         </label>
         <button type='submit' disabled={loading} className='rounded bg-emerald-600 px-4 py-2 text-white disabled:opacity-70'>
-          {loading ? 'Anmelden…' : 'Mit lokalem Konto anmelden'}
+          {loading ? 'Einloggen…' : 'Einloggen'}
         </button>
       </form>
-
       <div className='space-y-2'>
         <p>Alternativ:</p>
         <button className='rounded bg-purple-600 px-4 py-2 text-white' onClick={startTwitchLogin}>Mit Twitch anmelden</button>
       </div>
-
-      {error ? <p className='text-red-400'>{error}</p> : null}
+      {error ? <p className='rounded border border-red-700 bg-red-950 p-3 text-red-300'>{error}</p> : null}
     </div>
   );
 }

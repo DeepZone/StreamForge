@@ -114,3 +114,39 @@ npm run prisma:push
 - Keine automatische Sanktion oder Moderationsentscheidung.
 - Keine Persönlichkeitsdiagnosen.
 - Watchlist/Potential-Moderatoren sind ausschließlich heuristische Hinweise zur manuellen Prüfung.
+
+## Ersten Admin anlegen
+
+Ports:
+- Frontend: `4173`
+- Backend: `8000`
+
+### Variante A: über das Frontend
+1. Setup-Seite öffnen: `http://SERVER-IP:4173/setup`
+2. Anzeigename, E-Mail und Passwort ausfüllen.
+3. Nach Erfolg wird eine Session gesetzt und die App lädt den eingeloggten Nutzer über `/api/auth/me`.
+
+### Variante B: per curl
+```bash
+curl -i http://localhost:8000/api/setup/status
+curl -i -X POST http://localhost:8000/api/setup/create-owner \
+  -H 'content-type: application/json' \
+  -d '{"displayName":"Owner","email":"owner@example.test","password":"Secret123!"}'
+curl -i -X POST http://localhost:8000/api/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"owner@example.test","password":"Secret123!"}'
+curl -i --cookie cookies.txt --cookie-jar cookies.txt http://localhost:8000/api/auth/me
+```
+
+### VITE_API_URL richtig setzen
+- Zugriff **vom selben Rechner**: `VITE_API_URL=http://localhost:8000`
+- Zugriff **von einem anderen Gerät im Netzwerk**: `VITE_API_URL=http://<SERVER-IP>:8000`
+
+### Typische Fehler
+- **"Login ist aktuell nicht erreichbar"**
+  - `VITE_API_URL` zeigt auf falschen Host/Port.
+  - Backend läuft nicht oder ist nicht erreichbar.
+  - CORS/Credentials blockieren den Request.
+  - Session-Cookie wird nicht gesetzt oder nicht mitgesendet.
+  - Setup wurde noch nicht durchgeführt.
+  - E-Mail/Passwort sind falsch.
