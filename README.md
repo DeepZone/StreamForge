@@ -150,3 +150,22 @@ curl -i --cookie cookies.txt --cookie-jar cookies.txt http://192.168.58.158:8000
   - Session-Cookie wird nicht gesetzt oder nicht mitgesendet.
   - Setup wurde noch nicht durchgeführt.
   - E-Mail/Passwort sind falsch.
+
+## Dashboard Funktionen
+
+- Frontend läuft lokal unter `http://192.168.58.158:4173`.
+- Login über `/login`, danach Weiterleitung zur Kanalauswahl (`/channels`) oder direkt ins erste Channel-Dashboard.
+- Kanalauswahl verlinkt auf das echte Dashboard: `/dashboard/channels/:channelId`.
+- Dashboard-Routen:
+  - `/dashboard/channels/:channelId`
+  - `/dashboard/channels/:channelId/commands`
+  - `/dashboard/channels/:channelId/timers`
+  - `/dashboard/channels/:channelId/community`
+  - `/dashboard/channels/:channelId/recaps`
+  - `/dashboard/channels/:channelId/campaigns`
+  - `/dashboard/channels/:channelId/moderation`
+  - `/dashboard/channels/:channelId/integrations`
+  - `/dashboard/channels/:channelId/settings`
+  - `/admin/health`
+- Aktuell nutzbar (MVP): Dashboard-Übersicht, Commands CRUD, Timers CRUD, Campaigns CRUD, Community Radar, Recaps, Admin Health.
+- Noch MVP/Platzhalter mit Erklärung: Moderation, Integrationen, Settings.

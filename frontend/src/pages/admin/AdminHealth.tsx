@@ -1,24 +1,26 @@
 import { useEffect, useState } from 'react';
-import { apiBase } from '../../api/client';
+import { Navigate } from 'react-router-dom';
+import { apiGet, apiPost } from '../../api/client';
+import { useAuth } from '../../auth/AuthProvider';
 
 export default function AdminHealth() {
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
-    const res = await fetch(`${apiBase}/api/admin/health`, { credentials: 'include' });
-    const json = await res.json();
-    setData(json);
+    setData(await apiGet('/api/admin/health'));
   };
 
   const action = async (path: string) => {
     setLoading(true);
-    await fetch(`${apiBase}${path}`, { method: 'POST', credentials: 'include' });
+    await apiPost(path);
     await load();
     setLoading(false);
   };
 
   useEffect(() => { load().catch(() => setData({ error: true })); }, []);
+  if (user && !['system_owner','platform_admin'].includes(user.role)) return <Navigate to='/channels' replace />;
   if (!data) return <div className='p-6'>Loading...</div>;
   const sessions = data?.twitch?.sessions ?? [];
 
