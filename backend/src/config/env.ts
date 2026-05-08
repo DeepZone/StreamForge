@@ -24,7 +24,9 @@ export const env = {
   twitchClientId: process.env.TWITCH_CLIENT_ID || '',
   twitchClientSecret: process.env.TWITCH_CLIENT_SECRET || '',
   twitchRedirectUri: process.env.TWITCH_REDIRECT_URI || '',
-  tokenKey: process.env.TOKEN_ENCRYPTION_KEY || ''
+  tokenKey: process.env.TOKEN_ENCRYPTION_KEY || '',
+  twitchEventSubEnabled: process.env.TWITCH_EVENTSUB_ENABLED === 'true',
+  twitchEventSubDebug: process.env.TWITCH_EVENTSUB_DEBUG === 'true'
 };
 
 export const hasTwitchOAuthConfig = () => Boolean(env.twitchClientId && env.twitchClientSecret && env.twitchRedirectUri);

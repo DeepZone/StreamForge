@@ -8,8 +8,9 @@ import { requireAuth, AuthedRequest } from '../auth/guards.js';
 import { assertTwitchOAuthConfig, env } from '../config/env.js';
 import { TwitchApi } from '../twitch/TwitchApi.js';
 import { encryptSecret } from '../utils/crypto.js';
+import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
 
-const twitchScopes = ['user:read:email', 'chat:read', 'chat:edit', 'moderator:read:followers', 'channel:read:subscriptions'];
+const twitchScopes = [...TWITCH_MVP_SCOPES];
 const twitchApi = new TwitchApi();
 
 const buildSessionForUser = async (userId: string) => {

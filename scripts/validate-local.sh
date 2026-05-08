@@ -9,7 +9,7 @@ echo "[1/9] backend npm install"
 echo "[2/9] backend prisma format"
 (cd backend && npm run prisma:format)
 echo "[3/9] backend prisma validate"
-(cd backend && npm run prisma:validate)
+(cd backend && DATABASE_URL=${DATABASE_URL:-postgresql://streamforge:streamforge@localhost:5432/streamforge} npm run prisma:validate)
 echo "[4/9] backend prisma generate"
 (cd backend && npm run prisma:generate)
 echo "[5/9] backend build"
