@@ -79,7 +79,7 @@ export class TwitchChannelSession {
     } catch (e: any) {
       this.lastError = e?.message ?? 'init_failed';
       if (this.lastError === 'auth_required') this.status = 'auth_required';
-      else if (this.status !== 'token_error') this.status = 'error';
+      else if (this.lastError !== 'token_refresh_failed') this.status = 'error';
       await this.logEvent('session_error', { error: this.lastError });
       throw e;
     }

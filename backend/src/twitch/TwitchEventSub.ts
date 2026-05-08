@@ -17,13 +17,14 @@ export class TwitchEventSub {
   connect(url = 'wss://eventsub.wss.twitch.tv/ws') {
     this.stopped = false;
     this.ws = new WebSocket(url);
-    this.ws.on('open', async () => {
+    const ws = this.ws;
+    ws.on('open', async () => {
       this.reconnectDelayMs = 1000;
       await this.handlers.onOpen?.();
     });
-    this.ws.on('message', async (raw) => {
+    ws.on('message', async (raw: unknown) => {
       try {
-        const data = JSON.parse(raw.toString());
+        const data = JSON.parse(String(raw));
         const t = data?.metadata?.message_type;
         if (t === 'session_welcome') await this.handlers.onWelcome(data.payload.session.id);
         else if (t === 'session_reconnect') this.reconnect(data.payload.session.reconnect_url);
@@ -32,10 +33,10 @@ export class TwitchEventSub {
         else if (t === 'revocation') await this.handlers.onRevocation?.(data.payload);
       } catch {}
     });
-    this.ws.on('close', () => {
+    ws.on('close', () => {
       if (!this.stopped) this.reconnect();
     });
-    this.ws.on('error', () => undefined);
+    ws.on('error', () => undefined);
   }
 
   private reconnect(url?: string) {
