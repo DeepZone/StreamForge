@@ -9,7 +9,7 @@ echo "[1/9] backend npm install"
 echo "[2/9] backend prisma format"
 (cd backend && npm run prisma:format)
 echo "[3/9] backend prisma validate"
-(cd backend && DATABASE_URL=${DATABASE_URL:-postgresql://streamforge:streamforge@localhost:5432/streamforge} npm run prisma:validate)
+(cd backend && DATABASE_URL=${DATABASE_URL:-postgresql://streamforge:streamforge@localhost:5432/streamforge?schema=public} npm run prisma:validate)
 echo "[4/9] backend prisma generate"
 (cd backend && npm run prisma:generate)
 echo "[5/9] backend build"
@@ -26,4 +26,11 @@ else
   echo "[WARN] Docker not found; skipping docker compose build"
 fi
 
-echo "[9/9] Validation completed"
+echo "[9/10] Validation completed"
+
+if [[ "${RUN_SMOKE_TEST:-false}" == "true" ]]; then
+  echo "[10/10] running local smoke test"
+  bash scripts/smoke-test-local.sh
+else
+  echo "[10/10] smoke test skipped (set RUN_SMOKE_TEST=true to run)"
+fi
