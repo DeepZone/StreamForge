@@ -19,7 +19,7 @@ export default function LoginPage() {
       await apiPost<{ ok: true }>('/api/auth/login', { email, password });
       const me = await refresh();
       if (!me) {
-        setError(`Login erfolgreich, aber keine Session aktiv. Prüfe Cookie-/HTTPS-Setup und API-Basis (${apiBase}).`);
+        setError(`Login erfolgreich, aber keine Session aktiv. Prüfe Cookie-/HTTPS-Setup und API-Basis (${apiBase || 'same-origin /api'}).`);
         return;
       }
       navigate('/channels', { replace: true });
@@ -29,7 +29,7 @@ export default function LoginPage() {
       } else if (err?.status === 400) {
         setError(err?.data?.error ?? 'Bitte alle Pflichtfelder korrekt ausfüllen.');
       } else {
-        setError(`Login ist aktuell nicht erreichbar. API-Basis: ${apiBase}. Bitte Backend-Status und VITE_API_URL prüfen.`);
+        setError(`Login ist aktuell nicht erreichbar. API-Basis: ${apiBase || 'same-origin /api'}. Bitte Backend-Status und VITE_API_URL prüfen.`);
       }
     } finally {
       setLoading(false);

@@ -1,4 +1,26 @@
-export const apiBase = (import.meta.env.VITE_API_URL || 'http://192.168.58.158:8000').replace(/\/$/, '');
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim() ?? '';
+
+function resolveApiBase(): string {
+  if (!configuredApiUrl) {
+    return '';
+  }
+
+  try {
+    const configured = new URL(configuredApiUrl, window.location.origin);
+
+    if (window.location.protocol === 'https:' && configured.protocol === 'http:') {
+      configured.protocol = 'https:';
+    }
+
+    return configured.toString().replace(/\/$/, '');
+  } catch {
+    return configuredApiUrl.replace(/\/$/, '');
+  }
+}
+
+export const apiBase = resolveApiBase();
+
+const withApiBase = (path: string) => (apiBase ? `${apiBase}${path}` : path);
 
 type ApiMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -20,7 +42,7 @@ async function request<T>(method: ApiMethod, path: string, body?: unknown): Prom
     init.body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${apiBase}${path}`, init);
+  const res = await fetch(withApiBase(path), init);
   const contentType = res.headers.get('content-type') || '';
   const payload = contentType.includes('application/json') ? await res.json() : null;
 
