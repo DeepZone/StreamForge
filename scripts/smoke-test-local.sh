@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API_BASE="${API_BASE:-http://localhost:8000}"
+API_BASE="${API_BASE:-http://192.168.58.158:8000}"
 COOKIE_JAR="${COOKIE_JAR:-cookies.txt}"
 TEST_EMAIL="${SMOKE_TEST_EMAIL:-smoke.owner.local@example.test}"
 TEST_PASSWORD="${SMOKE_TEST_PASSWORD:-LocalSmokePass123!}"

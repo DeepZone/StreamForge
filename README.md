@@ -5,15 +5,15 @@
 1. `.env.example` nach `.env` kopieren und lokale Werte setzen.
 2. Starten: `docker compose up --build`
 3. URLs lokal:
-   - Frontend: `http://localhost:4173`
-   - Backend: `http://localhost:8000`
+   - Frontend: `http://192.168.58.158:4173`
+   - Backend: `http://192.168.58.158:8000`
 
 ### Wichtige ENV-Werte für Container
 - `DATABASE_URL=postgresql://streamforge:streamforge@postgres:5432/streamforge?schema=public`
 - `REDIS_URL=redis://redis:6379`
-- `FRONTEND_URL=http://localhost:4173`
-- `BACKEND_URL=http://localhost:8000`
-- `TWITCH_REDIRECT_URI=http://localhost:8000/api/auth/twitch/callback`
+- `FRONTEND_URL=http://192.168.58.158:4173`
+- `BACKEND_URL=http://192.168.58.158:8000`
+- `TWITCH_REDIRECT_URI=http://192.168.58.158:8000/api/auth/twitch/callback`
 - `TOKEN_ENCRYPTION_KEY=<64 hex chars>`
 - `SESSION_SECRET=<long random secret>`
 - `TWITCH_EVENTSUB_ENABLED=false` (für den ersten OAuth-Testlauf)
@@ -56,7 +56,7 @@ Falls Setup schon abgeschlossen ist und der lokale Smoke-Test-User nicht existie
 ```bash
 cd backend
 npm run prisma:format
-DATABASE_URL=postgresql://streamforge:streamforge@localhost:5432/streamforge?schema=public npm run prisma:validate
+DATABASE_URL=postgresql://streamforge:streamforge@192.168.58.158:5432/streamforge?schema=public npm run prisma:validate
 npm run prisma:generate
 npm run prisma:push
 ```
@@ -66,7 +66,7 @@ npm run prisma:push
 ## Twitch OAuth manuelle E2E-Checkliste
 
 1. Twitch Developer App anlegen.
-2. Redirect URL setzen auf `http://localhost:8000/api/auth/twitch/callback`.
+2. Redirect URL setzen auf `http://192.168.58.158:8000/api/auth/twitch/callback`.
 3. `.env` setzen:
    - `TWITCH_CLIENT_ID`
    - `TWITCH_CLIENT_SECRET`
@@ -128,18 +128,18 @@ Ports:
 
 ### Variante B: per curl
 ```bash
-curl -i http://localhost:8000/api/setup/status
-curl -i -X POST http://localhost:8000/api/setup/create-owner \
+curl -i http://192.168.58.158:8000/api/setup/status
+curl -i -X POST http://192.168.58.158:8000/api/setup/create-owner \
   -H 'content-type: application/json' \
   -d '{"displayName":"Owner","email":"owner@example.test","password":"Secret123!"}'
-curl -i -X POST http://localhost:8000/api/auth/login \
+curl -i -X POST http://192.168.58.158:8000/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"owner@example.test","password":"Secret123!"}'
-curl -i --cookie cookies.txt --cookie-jar cookies.txt http://localhost:8000/api/auth/me
+curl -i --cookie cookies.txt --cookie-jar cookies.txt http://192.168.58.158:8000/api/auth/me
 ```
 
 ### VITE_API_URL richtig setzen
-- Zugriff **vom selben Rechner**: `VITE_API_URL=http://localhost:8000`
+- Zugriff **vom selben Rechner**: `VITE_API_URL=http://192.168.58.158:8000`
 - Zugriff **von einem anderen Gerät im Netzwerk**: `VITE_API_URL=http://<SERVER-IP>:8000`
 
 ### Typische Fehler
