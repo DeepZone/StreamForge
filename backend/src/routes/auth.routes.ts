@@ -34,8 +34,13 @@ const buildSessionForUser = async (userId: string) => {
 
 const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/auth/login', async (req: any, rep) => {
-    const u = await prisma.user.findUnique({ where: { email: req.body.email.toLowerCase() } });
-    if (!u || !u.passwordHash || !(await verifyPassword(u.passwordHash, req.body.password))) {
+    const email = typeof req?.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req?.body?.password === 'string' ? req.body.password : '';
+    if (!email) return rep.code(400).send({ error: 'email_required' });
+    if (!password) return rep.code(400).send({ error: 'password_required' });
+
+    const u = await prisma.user.findUnique({ where: { email } });
+    if (!u || !u.passwordHash || !(await verifyPassword(u.passwordHash, password))) {
       return rep.code(401).send({ error: 'invalid_credentials' });
     }
     const { session } = await buildSessionForUser(u.id);
@@ -74,43 +79,12 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       const twitchUser = await twitchApi.getCurrentUser(tokens.access_token);
 
       const result = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.upsert({
-          where: { twitchUserId: twitchUser.id },
-          create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url },
-          update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }
-        });
-        const channel = await tx.channel.upsert({
-          where: { twitchChannelId: twitchUser.id },
-          create: { twitchChannelId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url },
-          update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }
-        });
+        const user = await tx.user.upsert({ where: { twitchUserId: twitchUser.id }, create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }, update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url } });
+        const channel = await tx.channel.upsert({ where: { twitchChannelId: twitchUser.id }, create: { twitchChannelId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }, update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url } });
         await tx.channelSettings.upsert({ where: { channelId: channel.id }, create: { channelId: channel.id }, update: {} });
-        await tx.command.upsert({
-          where: { channelId_name: { channelId: channel.id, name: 'ping' } },
-          create: { channelId: channel.id, name: 'ping', aliasesJson: '[]', response: 'pong', conditionsJson: '{}' },
-          update: {}
-        });
-        await tx.channelMember.upsert({
-          where: { channelId_userId: { channelId: channel.id, userId: user.id } },
-          create: { channelId: channel.id, userId: user.id, role: 'channel_owner' },
-          update: { role: 'channel_owner' }
-        });
-        await tx.twitchToken.upsert({
-          where: { channelId: channel.id },
-          create: {
-            channelId: channel.id,
-            accessTokenEncrypted: encryptSecret(tokens.access_token),
-            refreshTokenEncrypted: encryptSecret(tokens.refresh_token),
-            scopesJson: JSON.stringify(tokens.scope),
-            expiresAt: new Date(Date.now() + tokens.expires_in * 1000)
-          },
-          update: {
-            accessTokenEncrypted: encryptSecret(tokens.access_token),
-            refreshTokenEncrypted: encryptSecret(tokens.refresh_token),
-            scopesJson: JSON.stringify(tokens.scope),
-            expiresAt: new Date(Date.now() + tokens.expires_in * 1000)
-          }
-        });
+        await tx.command.upsert({ where: { channelId_name: { channelId: channel.id, name: 'ping' } }, create: { channelId: channel.id, name: 'ping', aliasesJson: '[]', response: 'pong', conditionsJson: '{}' }, update: {} });
+        await tx.channelMember.upsert({ where: { channelId_userId: { channelId: channel.id, userId: user.id } }, create: { channelId: channel.id, userId: user.id, role: 'channel_owner' }, update: { role: 'channel_owner' } });
+        await tx.twitchToken.upsert({ where: { channelId: channel.id }, create: { channelId: channel.id, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope), expiresAt: new Date(Date.now() + tokens.expires_in * 1000) }, update: { accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope), expiresAt: new Date(Date.now() + tokens.expires_in * 1000) } });
         return { user, channel };
       });
 

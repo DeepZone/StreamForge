@@ -14,7 +14,18 @@ import recapsRoutes from './routes/recaps.routes.js';
 
 const app = Fastify();
 app.register(cookie, { secret: env.sessionSecret });
-app.register(cors, { origin: true, credentials: true });
+
+const allowedOrigins = new Set([env.frontendUrl, 'http://localhost:4173', 'http://127.0.0.1:4173']);
+app.register(cors, {
+  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin not allowed'), false);
+  }
+});
 
 app.register(setupRoutes);
 app.register(authRoutes);
