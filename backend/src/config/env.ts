@@ -44,7 +44,7 @@ export const env = {
   rateLimitEnabled: parsed.RATE_LIMIT_ENABLED,
   twitchClientId: parsed.TWITCH_CLIENT_ID,
   twitchClientSecret: parsed.TWITCH_CLIENT_SECRET,
-  twitchRedirectUri: parsed.TWITCH_REDIRECT_URI,
+  twitchRedirectUri: parsed.TWITCH_REDIRECT_URI || `${parsed.BACKEND_URL.replace(/\/$/u, '')}/api/auth/twitch/callback`,
   tokenKey: parsed.TOKEN_ENCRYPTION_KEY,
   twitchEventSubEnabled: parsed.TWITCH_EVENTSUB_ENABLED,
   twitchEventSubDebug: parsed.TWITCH_EVENTSUB_DEBUG
@@ -55,6 +55,6 @@ export const assertTwitchOAuthConfig = () => { if (!hasTwitchOAuthConfig()) thro
 export const getMissingTwitchOAuthEnvVars = () => [
   ['TWITCH_CLIENT_ID', env.twitchClientId],
   ['TWITCH_CLIENT_SECRET', env.twitchClientSecret],
-  ['TWITCH_REDIRECT_URI', env.twitchRedirectUri]
+  ['TWITCH_REDIRECT_URI', parsed.TWITCH_REDIRECT_URI]
 ].filter(([, value]) => !value).map(([key]) => key);
 export const assertTokenEncryptionKey = () => { const result = tokenKeySchema.safeParse(env.tokenKey); if (!result.success) throw new Error(result.error.issues[0]?.message || 'Invalid TOKEN_ENCRYPTION_KEY'); };
