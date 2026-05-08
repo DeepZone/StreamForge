@@ -52,4 +52,9 @@ export const env = {
 
 export const hasTwitchOAuthConfig = () => Boolean(env.twitchClientId && env.twitchClientSecret && env.twitchRedirectUri);
 export const assertTwitchOAuthConfig = () => { if (!hasTwitchOAuthConfig()) throw new Error('Twitch OAuth not configured.'); };
+export const getMissingTwitchOAuthEnvVars = () => [
+  ['TWITCH_CLIENT_ID', env.twitchClientId],
+  ['TWITCH_CLIENT_SECRET', env.twitchClientSecret],
+  ['TWITCH_REDIRECT_URI', env.twitchRedirectUri]
+].filter(([, value]) => !value).map(([key]) => key);
 export const assertTokenEncryptionKey = () => { const result = tokenKeySchema.safeParse(env.tokenKey); if (!result.success) throw new Error(result.error.issues[0]?.message || 'Invalid TOKEN_ENCRYPTION_KEY'); };

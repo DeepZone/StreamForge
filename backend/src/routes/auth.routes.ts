@@ -5,7 +5,7 @@ import { prisma } from '../db/prisma.js';
 import { verifyPassword } from '../auth/password.js';
 import { clearSession, setSession } from '../auth/session.js';
 import { requireAuth, AuthedRequest } from '../auth/guards.js';
-import { assertTwitchOAuthConfig, env } from '../config/env.js';
+import { assertTwitchOAuthConfig, env, getMissingTwitchOAuthEnvVars } from '../config/env.js';
 import { TwitchApi } from '../twitch/TwitchApi.js';
 import { encryptSecret } from '../utils/crypto.js';
 import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
@@ -62,8 +62,9 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       url.searchParams.set('state', state);
       return rep.redirect(url.toString());
     } catch (error) {
+      const missingEnvVars = getMissingTwitchOAuthEnvVars();
       app.log.error({ error }, 'twitch oauth start unavailable');
-      return rep.code(500).send({ error: 'twitch_oauth_not_configured' });
+      return rep.code(500).send({ error: 'twitch_oauth_not_configured', missingEnvVars });
     }
   });
 
