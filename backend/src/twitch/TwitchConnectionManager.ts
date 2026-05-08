@@ -21,9 +21,11 @@ export class TwitchConnectionManager {
   async startAll() {
     if (!env.twitchEventSubEnabled) return { ok: false, reason: 'eventsub_disabled' };
     const channels = await prisma.channel.findMany({ where: { isActive: true, botEnabled: true }, select: { id: true } });
-    await Promise.all(channels.map((c) => this.startChannel(c.id)));
+    const results = await Promise.allSettled(channels.map((c) => this.startChannel(c.id)));
+    const started = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - started;
     this.eventSub.connect();
-    return { ok: true, count: channels.length };
+    return { ok: true, count: started, failed };
   }
 
   async stopAll() {
