@@ -44,7 +44,15 @@ export default function LoginPage() {
         if (location) window.location.href = location;
         return;
       }
-      if (!res.ok) setError('Twitch OAuth ist im Backend nicht korrekt konfiguriert.');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { missingEnvVars?: string[] } | null;
+        const missing = data?.missingEnvVars ?? [];
+        if (missing.length > 0) {
+          setError(`Twitch OAuth fehlt im Backend: ${missing.join(', ')}.`);
+          return;
+        }
+        setError('Twitch OAuth ist im Backend nicht korrekt konfiguriert.');
+      }
     } catch {
       setError('Twitch OAuth ist aktuell nicht erreichbar.');
     }
