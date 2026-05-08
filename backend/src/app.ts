@@ -19,7 +19,9 @@ const allowedOrigins = new Set([
   env.frontendUrl,
   'http://192.168.58.158:4173',
   'https://www.streamforge-bot.com',
-  'http://www.streamforge-bot.com'
+  'http://www.streamforge-bot.com',
+  'https://streamforge-bot.com',
+  'http://streamforge-bot.com'
 ]);
 app.register(cors, {
   credentials: true,
