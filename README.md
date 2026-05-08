@@ -1,33 +1,49 @@
-# StreamForge
-Mandantenfähige Twitch-/Discord-Bot-Plattform (MVP) mit Fastify, Prisma, React und Docker Compose.
+# StreamForge MVP
 
-## Features
-- Multi-Tenant über `Channel` + `ChannelMember` Rollenmodell.
-- Setup-Assistent für ersten `system_owner`.
-- Lokaler Login (E-Mail/Passwort) und vorbereitete Twitch OAuth-Architektur.
-- Kanal-Scopes für Commands, Timer, Campaigns, Logs, Community, Recaps.
-- Kampagnen-Shortlinks (`/c/:shortCode`) mit Click-Tracking und IP-Hashing.
+## Lokaler Start (ohne Docker)
+1. `.env.example` nach `.env` kopieren.
+2. Backend:
+   - `cd backend`
+   - `npm install`
+   - `npx prisma generate`
+   - `npx prisma db push`
+   - `npm run dev`
+3. Frontend:
+   - `cd frontend`
+   - `npm install`
+   - `npm run dev`
 
-## Start
-1. `.env.example` nach `.env` kopieren und Werte setzen.
-2. `docker compose up --build`
-3. Backend: `http://localhost:3000`, Frontend: `http://localhost:5173`
+## Docker Compose
+- Build: `docker compose build`
+- Start: `docker compose up`
+- Services:
+  - Frontend: http://localhost:5173
+  - Backend: http://localhost:3000
+  - Postgres: localhost:5432
+  - Redis: localhost:6379
 
-## Wichtige ENV
-`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_REDIRECT_URI`, `FRONTEND_URL`, `BACKEND_URL`.
+## Setup-Flow (erster Admin)
+- Es gibt **keinen automatischen Admin-Seed**.
+- Setup ist nur erlaubt, solange kein lokaler `system_owner` existiert.
+- Prüfen: `GET /api/setup/status`
+- Erstellen: `POST /api/setup/create-owner`
+- Nach Erfolg wird Session-Cookie gesetzt.
+
+## Auth-Flow
+- Login: `POST /api/auth/login`
+- Me: `GET /api/auth/me`
+- Logout: `POST /api/auth/logout`
 
 ## Prisma
-Im Backend-Container wird beim Start `prisma db push` ausgeführt.
+- Schema: `backend/prisma/schema.prisma`
+- Validierung: `npx prisma validate`
+- Client-Generierung: `npx prisma generate`
+- Entwicklung ohne Migrationen: `npx prisma db push`
 
-## Setup erster Admin
-- Öffne Frontend `/setup`.
-- Backend prüft serverseitig über `GET /api/setup/status`.
-- `POST /api/setup/create-owner` funktioniert nur einmalig.
+## Typische Fehler
+- `npm ERR! 403 Forbidden` beim Installieren: Registry-/Netzwerkpolicy prüfen.
+- Prisma kann DB nicht erreichen: `DATABASE_URL` prüfen, Postgres-Container gestartet?
+- Setup nicht mehr erlaubt: Es existiert bereits ein lokaler `system_owner`.
 
-## Twitch
-Für echten OAuth/Helix/EventSub sind gültige Twitch App Credentials nötig. Struktur ist vorbereitet, produktive Adapter können in `backend/src/twitch/*` erweitert werden.
-
-## Security
-- Passwörter via Argon2 gehasht.
-- Kampagnen-IP wird gehasht gespeichert.
-- Keine Secrets hardcoded.
+## Hinweis Twitch
+Twitch OAuth/EventSub ist im Projekt strukturell vorbereitet, aber die vollständige produktive Anbindung folgt in einem späteren Schritt.
