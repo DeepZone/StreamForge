@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma.js';
 import { decryptSecret, encryptSecret } from '../utils/crypto.js';
 import { BotCore } from '../core/BotCore.js';
 import { TenantContext } from '../core/TenantContext.js';
+import { eventBus } from '../core/EventBus.js';
 import { TwitchApi } from './TwitchApi.js';
 import { recordChatMessage } from '../services/communityService.js';
 
@@ -124,7 +125,18 @@ export class TwitchChannelSession {
     const evt = payload?.event;
     if (!evt || evt.broadcaster_user_id !== this.channelTwitchId) return;
     this.lastMessageAt = new Date().toISOString();
-    await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
+    const saved = await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
+    const isCommand = String(evt.message?.text ?? '').trimStart().startsWith('!');
+    eventBus.publish(this.channelId, {
+      type: isCommand ? 'chat.command' : 'chat.message',
+      channelId: this.channelId,
+      messageId: saved.id,
+      userId: evt.chatter_user_id,
+      username: evt.chatter_user_login,
+      message: evt.message?.text ?? '',
+      isCommand,
+      createdAt: saved.createdAt.toISOString()
+    });
     await this.logEvent('chat_message_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
     const response = await this.botCore.handleMessage({ platform: 'twitch', channelId: this.channelId, externalMessageId: evt.message_id, userId: evt.chatter_user_id, username: evt.chatter_user_login, content: evt.message?.text ?? '', isMod: evt.chatter_is_moderator, isBroadcaster: evt.chatter_is_broadcaster }, new TenantContext(this.channelId, 'twitch'));
     if (response?.content) {

@@ -1,0 +1,11 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { apiGet } from '../api/client';
+import PageHeader from '../components/ui/PageHeader';
+
+export default function ChattersPage(){
+  const { channelId='' } = useParams(); const [data,setData]=useState<any>(null); const [error,setError]=useState(''); const [q,setQ]=useState(''); const [sort,setSort]=useState('username');
+  useEffect(()=>{apiGet(`/api/channels/${channelId}/twitch/chatters?limit=200`).then(setData).catch((e:any)=>{const code=e?.data?.errorCode; if(code==='twitch.chatters.missing_scope')setError('Bitte Twitch erneut verbinden, damit StreamForge die aktuelle Chatters-Liste lesen darf.'); else setError('Chatters konnten nicht geladen werden.');});},[channelId]);
+  const items=useMemo(()=>{const raw=(data?.items||[]).filter((i:any)=>i.userName.toLowerCase().includes(q.toLowerCase())); return raw.sort((a:any,b:any)=>sort==='messageCount'?b.messageCount-a.messageCount:sort==='lastSeen'?String(b.lastSeenAt||'').localeCompare(String(a.lastSeenAt||'')):a.userName.localeCompare(b.userName));},[data,q,sort]);
+  return <div className='space-y-3'><PageHeader title='Chatters' subtitle='Aktuelle Twitch-Chatmitglieder (kann verzögert sein).'/>{error&&<div className='text-amber-400'>{error}</div>}<div className='flex gap-2'><input className='px-3 py-2 rounded bg-zinc-900 border border-zinc-700' placeholder='Suche Username' value={q} onChange={e=>setQ(e.target.value)}/><select value={sort} onChange={e=>setSort(e.target.value)} className='px-3 py-2 rounded bg-zinc-900 border border-zinc-700'><option value='username'>Username</option><option value='messageCount'>Message Count</option><option value='lastSeen'>Last Seen</option></select></div><div className='text-sm text-zinc-400'>Gesamt: {data?.total ?? 0} · {data?.note ?? ''}</div>{!items.length?<div className='text-zinc-400'>Keine aktiven Chatters gefunden.</div>:<div className='rounded border border-zinc-800 divide-y divide-zinc-800'>{items.map((c:any)=><div key={c.userId} className='p-2 text-sm grid md:grid-cols-4 gap-2'><div>{c.userName}</div><div>Messages: {c.messageCount}</div><div>Commands: {c.commandCount}</div><div>Last Seen: {c.lastSeenAt?new Date(c.lastSeenAt).toLocaleString():'-'}</div></div>)}</div>}</div>;
+}
