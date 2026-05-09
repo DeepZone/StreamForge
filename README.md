@@ -272,6 +272,20 @@ curl -i https://www.streamforge-bot.com/api/auth/twitch/start
   - Unique Constraint.
   - Ungültiges Datenformat.
 
+
+### EventSub startet nur echte Twitch-Channels
+
+`startAll()` startet ausschließlich echte Streamer-Channels, wenn alle Bedingungen erfüllt sind:
+- `isActive=true`
+- `botEnabled=true`
+- gespeicherter TwitchToken vorhanden
+- kein interner System-Channel (`displayName=System`, `twitchLogin=system-*`, `twitchChannelId=sys-*`)
+
+Wichtig:
+- Der System-Channel wird nie für Twitch EventSub subscribed.
+- Channels ohne TwitchToken werden als `skipped` markiert (z. B. `missing_twitch_token`) und nicht als harter Fehler gezählt.
+- Der Plattform-Bot ist ein globaler Bot-Account und wird nicht automatisch als aktiver Streamer-Channel behandelt.
+
 ### EventSub Hinweis
 
 Für OAuth-Tests `TWITCH_EVENTSUB_ENABLED=false` setzen.

@@ -7,12 +7,28 @@ import { env } from '../config/env.js';
 
 const RECOVERABLE_STATUSES: TwitchSessionStatus[] = ['connected', 'reconnecting', 'subscribed', 'starting', 'idle'];
 
+const START_ALL_CHANNEL_SELECT = {
+  id: true,
+  displayName: true,
+  twitchLogin: true,
+  twitchChannelId: true,
+  tokens: { select: { id: true } }
+} as const;
+
 export class TwitchConnectionManager {
   private sessions = new Map<string, TwitchChannelSession>();
   private api = new TwitchApi();
   private botCore = new BotCore();
   private eventSubConnected = false;
   private reconcileTimer: NodeJS.Timeout | null = null;
+  private lastStartAllSummary: {
+    started: number;
+    skipped: number;
+    failed: number;
+    reasons: Record<string, number>;
+    channels: Array<{ channelId: string; status: 'started' | 'skipped' | 'failed'; error: string | null }>;
+    updatedAt: string;
+  } | null = null;
 
   private eventSub = new TwitchEventSub({
     onWelcome: async (sessionId) => {
@@ -34,12 +50,77 @@ export class TwitchConnectionManager {
   async startAll() {
     if (!env.twitchEventSubEnabled) return { ok: false, reason: 'eventsub_disabled' };
     this.eventSub.connect();
-    const channels = await prisma.channel.findMany({ where: { isActive: true, botEnabled: true }, select: { id: true } });
-    const results = await Promise.allSettled(channels.map((c) => this.startChannel(c.id)));
-    const started = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results.length - started;
+
+    const channels = await prisma.channel.findMany({
+      where: {
+        isActive: true,
+        botEnabled: true,
+        NOT: [
+          { displayName: 'System' },
+          { twitchLogin: { startsWith: 'system-' } },
+          { twitchChannelId: { startsWith: 'sys-' } }
+        ]
+      },
+      select: START_ALL_CHANNEL_SELECT
+    });
+
+    const channelResults: Array<{
+      channelId: string;
+      displayName: string;
+      twitchLogin: string;
+      twitchChannelId: string;
+      hasToken: boolean;
+      ok: boolean;
+      status: 'started' | 'skipped' | 'failed';
+      error: string | null;
+    }> = [];
+
+    for (const channel of channels) {
+      const base = {
+        channelId: channel.id,
+        displayName: channel.displayName,
+        twitchLogin: channel.twitchLogin,
+        twitchChannelId: channel.twitchChannelId,
+        hasToken: Boolean(channel.tokens)
+      };
+
+      if (!channel.tokens) {
+        channelResults.push({ ...base, ok: true, status: 'skipped', error: 'missing_twitch_token' });
+        continue;
+      }
+
+      if (!/^\d+$/u.test(channel.twitchChannelId)) {
+        channelResults.push({ ...base, ok: true, status: 'skipped', error: 'system_channel' });
+        continue;
+      }
+
+      try {
+        await this.startChannel(channel.id);
+        channelResults.push({ ...base, ok: true, status: 'started', error: null });
+      } catch (error: any) {
+        channelResults.push({ ...base, ok: false, status: 'failed', error: error?.message ?? 'auth_required' });
+      }
+    }
+
+    const started = channelResults.filter((x) => x.status === 'started').length;
+    const skipped = channelResults.filter((x) => x.status === 'skipped').length;
+    const failed = channelResults.filter((x) => x.status === 'failed').length;
+    const reasons = channelResults.reduce<Record<string, number>>((acc, item) => {
+      if (!item.error) return acc;
+      acc[item.error] = (acc[item.error] ?? 0) + 1;
+      return acc;
+    }, {});
+    this.lastStartAllSummary = {
+      started,
+      skipped,
+      failed,
+      reasons,
+      channels: channelResults.map((c) => ({ channelId: c.channelId, status: c.status, error: c.error })),
+      updatedAt: new Date().toISOString()
+    };
+
     this.startReconcileLoop();
-    return { ok: true, count: started, failed };
+    return { ok: true, count: started, failed, skipped, channels: channelResults };
   }
 
   private startReconcileLoop() {
@@ -51,7 +132,7 @@ export class TwitchConnectionManager {
     if (!env.twitchEventSubEnabled) return;
     if (!this.eventSub.isConnected()) this.eventSub.connect();
 
-    const channels = await prisma.channel.findMany({ where: { isActive: true, botEnabled: true }, select: { id: true } });
+    const channels = await prisma.channel.findMany({ where: { isActive: true, botEnabled: true, tokens: { isNot: null }, NOT: [{ displayName: 'System' }, { twitchLogin: { startsWith: 'system-' } }, { twitchChannelId: { startsWith: 'sys-' } }] }, select: { id: true } });
     const activeIds = new Set(channels.map((c) => c.id));
     for (const c of channels) {
       if (!this.sessions.has(c.id)) {
@@ -124,7 +205,8 @@ export class TwitchConnectionManager {
       eventSubLastError: this.eventSub.lastError,
       activeSessions: this.sessions.size,
       sessionsCount: this.sessions.size,
-      sessions: Array.from(this.sessions.values()).map((s) => s.getHealth())
+      sessions: Array.from(this.sessions.values()).map((s) => s.getHealth()),
+      startAll: this.lastStartAllSummary
     };
   }
 }
