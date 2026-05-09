@@ -40,21 +40,21 @@ const refreshTokenIfNeeded = async (source: 'broadcaster' | 'bot_account', token
   };
 
   if (source === 'broadcaster') await prisma.twitchToken.update({ where: { channelId: tokenRow.channelId! }, data });
-  else await prisma.twitchBotAccount.update({ where: { id: tokenRow.id! }, data });
+  else await prisma.platformTwitchBot.update({ where: { id: tokenRow.id! }, data });
   return { accessToken, scopes };
 };
 
 export const resolveChatSendAuth = async (channelId: string): Promise<ChatSendAuth> => {
-  const channel = await prisma.channel.findUnique({ where: { id: channelId }, include: { tokens: true, botAccountLinks: { where: { enabled: true }, include: { botAccount: true } } } });
+  const channel = await prisma.channel.findUnique({ where: { id: channelId }, include: { tokens: true } });
   if (!channel) throw new Error('channel_not_found');
-  const link = channel.botAccountLinks[0];
+  const bot = await prisma.platformTwitchBot.findFirst({ where: { isActive: true }, orderBy: { updatedAt: 'desc' } });
 
-  if (link?.botAccount) {
+  if (bot) {
     try {
-      const refreshed = await refreshTokenIfNeeded('bot_account', { ...link.botAccount, id: link.botAccount.id });
-      return { broadcasterId: channel.twitchChannelId, senderId: link.botAccount.twitchUserId, accessToken: refreshed.accessToken, sendAs: 'bot_account', botAccountLogin: link.botAccount.twitchLogin, botTokenStatus: 'ok' };
+      const refreshed = await refreshTokenIfNeeded('bot_account', { ...bot, id: bot.id });
+      return { broadcasterId: channel.twitchChannelId, senderId: bot.twitchUserId, accessToken: refreshed.accessToken, sendAs: 'bot_account', botAccountLogin: bot.twitchLogin, botTokenStatus: 'ok' };
     } catch {
-      return { broadcasterId: channel.twitchChannelId, senderId: channel.twitchChannelId, accessToken: '', sendAs: 'broadcaster', botAccountLogin: link.botAccount.twitchLogin, botTokenStatus: 'token_error' };
+      return { broadcasterId: channel.twitchChannelId, senderId: channel.twitchChannelId, accessToken: '', sendAs: 'broadcaster', botAccountLogin: bot.twitchLogin, botTokenStatus: 'token_error' };
     }
   }
 

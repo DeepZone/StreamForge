@@ -36,9 +36,9 @@ export class TwitchApi {
     return { Authorization: `Bearer ${accessToken}`, 'Client-Id': env.twitchClientId, 'Content-Type': 'application/json' };
   }
 
-  async exchangeCodeForToken(code: string): Promise<TokenResponse> {
+  async exchangeCodeForToken(code: string, redirectUri?: string): Promise<TokenResponse> {
     assertTwitchOAuthConfig();
-    const payload = new URLSearchParams({ client_id: env.twitchClientId, client_secret: env.twitchClientSecret, code, grant_type: 'authorization_code', redirect_uri: env.twitchRedirectUri });
+    const payload = new URLSearchParams({ client_id: env.twitchClientId, client_secret: env.twitchClientSecret, code, grant_type: 'authorization_code', redirect_uri: redirectUri || env.twitchRedirectUri });
     const res = await fetch('https://id.twitch.tv/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: payload.toString() });
     return this.parseResponse<TokenResponse>(res, 'exchange_code');
   }

@@ -124,24 +124,17 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       clearTwitchBotOAuthState(rep);
       return sendProblem(req, rep, 'twitch.bot_oauth.invalid_state', 400, 'OAuth-State ist ungültig oder abgelaufen.');
     }
-    const stateData = req.unsignCookie((req.cookies as any).sf_twitch_bot_oauth_meta);
-    if (!stateData?.valid || !stateData?.value) return sendProblem(req, rep, 'twitch.bot_oauth.invalid_state_payload', 400, 'OAuth-State Kontext fehlt.');
-    const parsed = JSON.parse(stateData.value) as { channelId: string };
     try {
-      const tokens = await twitchApi.exchangeCodeForToken(query.code);
+      const tokens = await twitchApi.exchangeCodeForToken(query.code, `${env.publicApiUrl}/auth/twitch/platform-bot/callback`);
       const twitchUser = await twitchApi.getCurrentUser(tokens.access_token);
       const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
-      await prisma.$transaction(async (tx) => {
-        const bot = await tx.twitchBotAccount.upsert({
-          where: { twitchUserId: twitchUser.id },
-          create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope ?? []), expiresAt },
-          update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope ?? []), expiresAt }
-        });
-        await tx.channelBotAccount.upsert({ where: { channelId: parsed.channelId }, create: { channelId: parsed.channelId, twitchBotAccountId: bot.id, enabled: true }, update: { twitchBotAccountId: bot.id, enabled: true } });
+      await prisma.platformTwitchBot.upsert({
+        where: { twitchUserId: twitchUser.id },
+        create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope ?? []), expiresAt, isActive: true },
+        update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope ?? []), expiresAt, isActive: true }
       });
       clearTwitchBotOAuthState(rep);
-      rep.clearCookie('sf_twitch_bot_oauth_meta', { path: '/api/auth/twitch/bot' });
-      return rep.redirect(`${env.publicAppUrl}/dashboard/channels/${parsed.channelId}/integrations`);
+      return rep.redirect(`${env.publicAppUrl}/admin/health`);
     } catch (error: any) {
       return sendProblem(req, rep, 'twitch.bot_oauth.callback_failed', 500, 'Bot-Account konnte nicht verbunden werden.');
     }

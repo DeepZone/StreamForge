@@ -424,3 +424,32 @@ Wenn ein anderer Name im Chat erscheinen soll, muss ein separater Twitch-Bot-Acc
 ### Scope-Hinweis
 
 Nach Scope-Änderungen muss Twitch OAuth erneut durchgeführt werden (Broadcaster- und/oder Bot-Flow).
+
+## Zentraler Plattform-Bot
+
+StreamForge verwendet einen zentralen Twitch-Bot-Account zum Senden von Chatnachrichten.
+
+- Broadcaster OAuth (pro Channel) bleibt für Channel-Verknüpfung, EventSub und Berechtigungsprüfung erforderlich.
+- Platform Bot OAuth (global) wird einmal im Adminbereich verbunden.
+- Streamer müssen den Plattform-Bot im eigenen Chat moderieren: `/mod BOTLOGIN`.
+- Ohne Plattform-Bot oder ohne Modrechte kann Senden fehlschlagen.
+- Nach Scope-Änderungen muss OAuth erneut durchgeführt werden.
+
+### Twitch Developer Console Redirect URLs (Production)
+
+Diese Redirect URLs müssen **exakt** eingetragen sein:
+
+- Broadcaster OAuth: `https://www.streamforge-bot.com/api/auth/twitch/callback`
+- Platform Bot OAuth: `https://www.streamforge-bot.com/api/auth/twitch/platform-bot/callback`
+
+### Testablauf
+
+1. Admin Login.
+2. Plattform-Bot verbinden.
+3. Redirect URL für Platform Bot Callback in Twitch Developer Console prüfen.
+4. Streamer Channel verbinden.
+5. In Twitch Chat: `/mod BOTLOGIN`.
+6. In StreamForge Moderatorstatus prüfen.
+7. Command anlegen.
+8. Im Twitch Chat ausführen.
+9. Bot antwortet unter BOTLOGIN.

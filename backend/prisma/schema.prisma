@@ -61,12 +61,12 @@ model Channel {
   discord         DiscordIntegration?
   notes           ModerationNote[]
   actions         ModerationAction[]
-  botAccountLinks ChannelBotAccount[]
+  botStatusLinks  ChannelBotStatus[]
 }
 
-model TwitchBotAccount {
-  id                    String              @id @default(cuid())
-  twitchUserId          String              @unique
+model PlatformTwitchBot {
+  id                    String             @id @default(cuid())
+  twitchUserId          String             @unique
   twitchLogin           String
   displayName           String
   avatarUrl             String?
@@ -74,20 +74,24 @@ model TwitchBotAccount {
   refreshTokenEncrypted String
   scopesJson            String
   expiresAt             DateTime
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  channelLinks          ChannelBotAccount[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  isActive              Boolean            @default(true)
+  channelStatus         ChannelBotStatus[]
 }
 
-model ChannelBotAccount {
-  id                 String           @id @default(cuid())
-  channelId          String           @unique
-  twitchBotAccountId String
-  enabled            Boolean          @default(true)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  channel            Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  botAccount         TwitchBotAccount @relation(fields: [twitchBotAccountId], references: [id], onDelete: Restrict)
+model ChannelBotStatus {
+  id            String            @id @default(cuid())
+  channelId     String            @unique
+  platformBotId String
+  status        String            @default("unknown")
+  isModerator   Boolean           @default(false)
+  lastCheckedAt DateTime?
+  lastError     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  channel       Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  platformBot   PlatformTwitchBot @relation(fields: [platformBotId], references: [id], onDelete: Restrict)
 }
 
 model ChannelMember {
