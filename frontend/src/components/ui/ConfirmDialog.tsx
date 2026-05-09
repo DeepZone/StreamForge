@@ -1,0 +1,3 @@
+import Button from './Button';
+import Card from './Card';
+export default function ConfirmDialog({ open, title, description, confirmLabel = 'Bestätigen', cancelLabel = 'Abbrechen', onConfirm, onCancel }: any) { if (!open) return null; return <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4'><Card className='w-full max-w-lg p-4 space-y-3'><h3 className='text-lg font-semibold'>{title}</h3>{description && <p className='text-sm text-zinc-300'>{description}</p>}<div className='flex justify-end gap-2'><Button onClick={onCancel} variant='ghost'>{cancelLabel}</Button><button className='px-3 py-2 rounded text-white bg-rose-700 hover:bg-rose-600' onClick={onConfirm}>{confirmLabel}</button></div></Card></div>; }

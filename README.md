@@ -587,3 +587,12 @@ Wenn neue Chatnachrichten nicht erscheinen:
    - Live-Stream/SSE verbunden
 
 Wenn `scope_missing` angezeigt wird, Twitch-Kanal erneut verbinden, damit `channel:manage:moderators` im Broadcaster-Token enthalten ist.
+
+## Twitch MVP Status (Operations)
+
+- Twitch OAuth, Livechat, Chatters, Moderation, Integrationen und Settings sind im MVP nutzbar.
+- Debug-Daten pro Channel: `GET /api/channels/:channelId/twitch/debug` (ohne Token/Secret-Werte).
+- Debug UI: im Bereich Integrationen sichtbar (EventSub, letzte Nachrichten, Live-Subscriber, Bot-Status).
+- Livechat prüfen: `/dashboard/channels/:channelId/livechat` öffnen, SSE-Status beobachten und Historie neu laden.
+- Plattform-Bot prüfen: in Integrationen `Moderatorstatus prüfen` ausführen.
+- Nach Scope-Änderungen muss Twitch OAuth neu verbunden werden (z. B. `moderator:manage:banned_users`, `channel:manage:moderators`, `channel:manage:vips`, `channel:read:vips`).

@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiBase, apiGet } from '../api/client';
 import PageHeader from '../components/ui/PageHeader';
+import StatusBadge from '../components/ui/StatusBadge';
+import ErrorBox from '../components/ui/ErrorBox';
+import EmptyState from '../components/ui/EmptyState';
+import Button from '../components/ui/Button';
 
 export default function LiveChatPage() {
   const { channelId = '' } = useParams();
@@ -9,10 +13,12 @@ export default function LiveChatPage() {
   const [status, setStatus] = useState<'connected'|'reconnecting'|'disconnected'>('disconnected');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [historyLoadedAt, setHistoryLoadedAt] = useState<string | null>(null);
+  const [liveSince, setLiveSince] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const loadHistory = async () => {
-    try { const d = await apiGet<{ items: any[] }>(`/api/channels/${channelId}/chat/messages?limit=100`); setItems(d.items.reverse()); setError(''); }
+    try { const d = await apiGet<{ items: any[] }>(`/api/channels/${channelId}/chat/messages?limit=100`); setItems(d.items.reverse()); setError(''); setHistoryLoadedAt(new Date().toISOString()); }
     catch { setError('Historie konnte nicht geladen werden.'); }
   };
 
@@ -23,7 +29,7 @@ export default function LiveChatPage() {
     const connect = () => {
       setStatus((s) => s === 'disconnected' ? 'reconnecting' : s);
       es = new EventSource(`${apiBase}/api/channels/${channelId}/live/chat/stream`, { withCredentials: true });
-      es.onopen = () => { setStatus('connected'); setError(''); };
+      es.onopen = () => { setStatus('connected'); setError(''); setLiveSince((x) => x || new Date().toISOString()); };
       es.onmessage = (evt) => { const e = JSON.parse(evt.data); if (e.type === 'system.keepalive') return; setItems((prev) => [...prev, e].slice(-500)); };
       es.onerror = () => {
         if (closed) return;
@@ -42,10 +48,11 @@ export default function LiveChatPage() {
 
   return <div className='space-y-3'>
     <PageHeader title='Live Chat' subtitle='Aktuelle Twitch-Chatnachrichten für diesen Channel.' />
-    <div className='flex gap-2 items-center'><input className='px-3 py-2 rounded bg-zinc-900 border border-zinc-700' placeholder='Suche…' value={query} onChange={e => setQuery(e.target.value)} /><button className='px-3 py-2 rounded bg-zinc-800' onClick={loadHistory}>Neu laden</button><div className='text-sm text-zinc-400'>Status: {status}</div></div>
-    {error && <div className='text-amber-400 text-sm'>{error}</div>}
+    <div className='flex gap-2 items-center'><input className='px-3 py-2 rounded bg-zinc-900 border border-zinc-700' placeholder='Suche…' value={query} onChange={e => setQuery(e.target.value)} /><Button onClick={loadHistory}>Historie neu laden</Button><div className='text-sm text-zinc-400'>SSE: <StatusBadge status={status} /></div></div>
+    <div className='text-xs text-zinc-400'>History geladen um {historyLoadedAt ? new Date(historyLoadedAt).toLocaleTimeString() : '-'} · Live-Verbindung aktiv seit {liveSince ? new Date(liveSince).toLocaleTimeString() : '-'}</div>
+    {error && <ErrorBox message={error} />}
     <div ref={boxRef} className='h-[65vh] overflow-auto rounded border border-zinc-800 bg-zinc-950 p-3 space-y-2'>
-      {!filtered.length ? <div className='text-zinc-400'>Noch keine Chatnachrichten sichtbar.</div> : filtered.map((m, i) => <div key={`${m.messageId || 'hist'}-${i}`} className='text-sm'><span className='text-zinc-500 mr-2'>{new Date(m.createdAt).toLocaleTimeString()}</span><span className='text-cyan-300'>{m.username}</span><span className='mx-2 text-zinc-500'>:</span><span>{m.message}</span></div>)}
+      {!filtered.length ? <EmptyState title='Keine Nachrichten' description='Noch keine Chatnachrichten sichtbar.' /> : filtered.map((m, i) => <div key={`${m.messageId || 'hist'}-${i}`} className='text-sm'><span className='text-zinc-500 mr-2'>{new Date(m.createdAt).toLocaleTimeString()}</span><span className='text-cyan-300'>{m.username}</span><span className='mx-2 text-zinc-500'>:</span><span>{m.message}</span></div>)}
     </div>
   </div>;
 }
