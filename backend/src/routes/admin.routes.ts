@@ -5,11 +5,12 @@ import { env, getMissingTwitchOAuthEnvVars, isTokenEncryptionKeyValid } from '..
 import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
 import { twitchConnectionManager } from '../twitch/managerSingleton.js';
 import { audit } from '../services/auditService.js';
+import { getTimerWorkerHealth } from '../workers/timerWorker.js';
 
 const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/health', { preHandler: requireAuth }, async (req, rep) => {
     if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
-    return { ok: true, db: 'up', twitch: { eventSubEnabled: env.twitchEventSubEnabled, ...twitchConnectionManager.health() } };
+    return { ok: true, db: 'up', backend: 'up', twitch: { eventSubEnabled: env.twitchEventSubEnabled, ...twitchConnectionManager.health() }, timerWorker: getTimerWorkerHealth() };
   });
 
   const ensureEnabled = (rep: any) => {
