@@ -1,4 +1,4 @@
-import { Platform } from '@prisma/client';
+import { Platform, Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { calcEngagementScore, detectFaq, detectTopTopics, resolveRange } from './analyticsService.js';
 
@@ -15,8 +15,25 @@ export const incrementCommunityCommandCount = async (channelId: string, platform
 });
 
 export const recordChatMessage = async (channelId: string, platform: Platform, externalMessageId: string | null, userExternalId: string, username: string, message: string) => {
+  if (externalMessageId) {
+    const existing = await prisma.chatMessage.findUnique({ where: { channelId_platform_externalMessageId: { channelId, platform, externalMessageId } } });
+    if (existing) return { message: existing, duplicate: true };
+    try {
+      const created = await prisma.chatMessage.create({ data: { channelId, platform, externalMessageId, userExternalId, username, message } });
+      await upsertCommunityUser(channelId, platform, userExternalId, username, username);
+      return { message: created, duplicate: false };
+    } catch (error: any) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const raced = await prisma.chatMessage.findUnique({ where: { channelId_platform_externalMessageId: { channelId, platform, externalMessageId } } });
+        if (raced) return { message: raced, duplicate: true };
+      }
+      throw error;
+    }
+  }
+
+  const created = await prisma.chatMessage.create({ data: { channelId, platform, externalMessageId: null, userExternalId, username, message } });
   await upsertCommunityUser(channelId, platform, userExternalId, username, username);
-  return prisma.chatMessage.create({ data: { channelId, platform, externalMessageId, userExternalId, username, message } });
+  return { message: created, duplicate: false };
 };
 
 export const getCommunityRadar = async (channelId: string, query: { from?: string; to?: string; limit?: string }) => {

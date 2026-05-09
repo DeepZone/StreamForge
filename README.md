@@ -635,3 +635,20 @@ Twitch erlaubt auf einer einzelnen EventSub-WebSocket-Session keine Subscription
 Darum nutzt StreamForge pro Broadcaster/User-Kontext eine eigene EventSub-WebSocket-Verbindung (Transport-Isolation pro User-ID).
 
 Der Plattform-Bot wird dabei nicht als normaler Channel subscribed. Der Plattform-Bot ist Sender/Moderator und wird nicht automatisch als beobachteter Channel gestartet.
+
+
+## ChatMessage-Dedupe Cleanup (vor `prisma db push`)
+
+Falls bereits doppelte Twitch-Chatnachrichten vorhanden sind, vor Schema-Update ausführen:
+
+```sql
+delete from "ChatMessage" c
+using "ChatMessage" d
+where c."channelId" = d."channelId"
+  and c.platform = d.platform
+  and c."externalMessageId" = d."externalMessageId"
+  and c."externalMessageId" is not null
+  and c."createdAt" > d."createdAt";
+```
+
+Danach `prisma db push` ausführen, damit der Unique Constraint sauber greift.

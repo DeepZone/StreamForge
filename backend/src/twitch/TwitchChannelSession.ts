@@ -19,6 +19,7 @@ export class TwitchChannelSession {
   public reconnectCount = 0;
   public subscriptionsCount = 0;
 
+  private subscribedSessionId: string | null = null;
   private channelTwitchId = '';
   private twitchLogin = '';
   private accessToken = '';
@@ -89,11 +90,16 @@ export class TwitchChannelSession {
 
   async ensureSubscription(sessionId: string) {
     if (this.status === 'reconnecting') this.reconnectCount += 1;
+    if (this.subscribedSessionId === sessionId && this.status === 'subscribed') {
+      await this.logEvent('ensure_subscription_skipped_already_subscribed', { sessionId, subscriptionsCount: this.subscriptionsCount });
+      return this.getHealth();
+    }
     if (!['connected', 'subscribed'].includes(this.status)) await this.init();
     try {
       await this.validateAndLoadToken();
       await this.api.createEventSubSubscription({ type: 'channel.chat.message', version: '1', condition: { broadcaster_user_id: this.channelTwitchId, user_id: this.ownerTwitchId }, sessionId, accessToken: this.accessToken });
       this.status = 'subscribed';
+      this.subscribedSessionId = sessionId;
       this.subscriptionsCount += 1;
       this.lastSubscriptionAt = new Date().toISOString();
       await this.logEvent('eventsub_subscription_created', { sessionId, subscriptionsCount: this.subscriptionsCount });
@@ -130,7 +136,12 @@ export class TwitchChannelSession {
       this.lastMessageAt = new Date().toISOString();
       await this.logEvent('eventsub_notification_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
       await this.logEvent('eventsub_chat_message_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
-      const saved = await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
+      const result = await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
+      const saved = result.message;
+      if (result.duplicate) {
+        await this.logEvent('chat_message_duplicate_skipped', { channelId: this.channelId, externalMessageId: evt.message_id ?? null, storedMessageId: saved.id });
+        return;
+      }
       await this.logEvent('chat_message_saved', { storedMessageId: saved.id, messageId: evt.message_id ?? null });
       await this.logEvent('community_user_updated', { userId: evt.chatter_user_id });
       const settings = await prisma.channelSettings.findUnique({ where: { channelId: this.channelId } });
@@ -169,7 +180,7 @@ export class TwitchChannelSession {
   }
 
   getHealth() {
-    return { channelId: this.channelId, twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin, status: this.status, connected: ['connected', 'subscribed'].includes(this.status), subscribed: this.status === 'subscribed', lastError: this.lastError, lastConnectedAt: this.lastConnectedAt, lastMessageAt: this.lastMessageAt, lastSubscriptionAt: this.lastSubscriptionAt, reconnectCount: this.reconnectCount, subscriptionsCount: this.subscriptionsCount, sendAs: 'unknown' };
+    return { channelId: this.channelId, twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin, status: this.status, connected: ['connected', 'subscribed'].includes(this.status), subscribed: this.status === 'subscribed', subscribedSessionIdPresent: Boolean(this.subscribedSessionId), lastError: this.lastError, lastConnectedAt: this.lastConnectedAt, lastMessageAt: this.lastMessageAt, lastSubscriptionAt: this.lastSubscriptionAt, reconnectCount: this.reconnectCount, subscriptionsCount: this.subscriptionsCount, sendAs: 'unknown' };
   }
 
   getBroadcasterTwitchId() { return this.channelTwitchId; }
