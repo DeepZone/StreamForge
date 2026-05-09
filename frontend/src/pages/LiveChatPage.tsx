@@ -5,8 +5,7 @@ import PageHeader from '../components/ui/PageHeader';
 
 const MOD_ACTIONS = [
   { key: 'timeout', label: 'Timeout' },
-  { key: 'ban', label: 'Ban' },
-  { key: 'unban', label: 'Unban / Untimeout' }
+  { key: 'ban', label: 'Ban' }
 ] as const;
 
 const TIMEOUT_OPTIONS = [
@@ -23,8 +22,9 @@ export default function LiveChatPage() {
   const [error, setError] = useState('');
   const [paused, setPaused] = useState(false);
   const [query, setQuery] = useState('');
+  const [selectedUserKey, setSelectedUserKey] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
-  const [selectedAction, setSelectedAction] = useState<'timeout' | 'ban' | 'unban' | null>(null);
+  const [selectedAction, setSelectedAction] = useState<'timeout' | 'ban' | null>(null);
   const [duration, setDuration] = useState<number>(300);
   const [reason, setReason] = useState('');
   const [modLoading, setModLoading] = useState(false);
@@ -70,7 +70,7 @@ export default function LiveChatPage() {
   }, [items, paused]);
 
   useEffect(() => {
-    const closeMenu = () => setSelectedUser(null);
+    const closeMenu = () => setSelectedUserKey(null);
     window.addEventListener('click', closeMenu);
     return () => window.removeEventListener('click', closeMenu);
   }, []);
@@ -117,12 +117,19 @@ export default function LiveChatPage() {
               className={`${m.isCommand ? 'text-indigo-300 font-semibold' : 'text-cyan-300'} hover:underline`}
               onClick={(e) => {
                 e.stopPropagation();
-                setSelectedUser(selectedUser?.messageId === m.messageId ? null : m);
+                const key = m.messageId || `${m.createdAt}-${m.username}-${i}`;
+                if (selectedUserKey === key) {
+                  setSelectedUserKey(null);
+                  setSelectedUser(null);
+                } else {
+                  setSelectedUserKey(key);
+                  setSelectedUser(m);
+                }
               }}
             >
               {m.username}
             </button>
-            {selectedUser?.messageId === m.messageId && <div className='absolute left-0 mt-1 w-52 rounded border border-zinc-700 bg-zinc-900 p-1 z-10'>
+            {selectedUserKey === (m.messageId || `${m.createdAt}-${m.username}-${i}`) && <div className='absolute left-0 mt-1 w-52 rounded border border-zinc-700 bg-zinc-900 p-1 z-10'>
               {MOD_ACTIONS.map((action) => <button
                 key={action.key}
                 className='w-full text-left px-2 py-1 rounded text-zinc-200 hover:bg-zinc-800'

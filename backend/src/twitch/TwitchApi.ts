@@ -89,6 +89,18 @@ export class TwitchApi {
     return this.parseResponse<{ data: TwitchChatter[]; pagination?: { cursor?: string }; total?: number }>(res, 'get_chatters');
   }
 
+
+  async getBannedUsers(params: { broadcasterId: string; moderatorId: string; accessToken: string; first?: number; after?: string }) {
+    const first = Math.min(Math.max(params.first ?? 100, 1), 100);
+    const url = new URL('https://api.twitch.tv/helix/moderation/banned');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('moderator_id', params.moderatorId);
+    url.searchParams.set('first', String(first));
+    if (params.after) url.searchParams.set('after', params.after);
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    return this.parseResponse<{ data: Array<{ user_id: string; user_login: string; user_name: string; expires_at: string | null; reason: string }>; pagination?: { cursor?: string } }>(res, 'get_banned_users');
+  }
+
   async banUser(params: { broadcasterId: string; moderatorId: string; userId: string; reason?: string; accessToken: string }) {
     const reason = params.reason?.slice(0, 500);
     const res = await fetch('https://api.twitch.tv/helix/moderation/bans', {
