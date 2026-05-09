@@ -4,15 +4,13 @@ import { apiGet, apiPatch, apiPost } from '../api/client';
 import PageHeader from '../components/ui/PageHeader';
 import ErrorBox from '../components/ui/ErrorBox';
 
-type Role = 'viewer' | 'channel_moderator' | 'channel_admin' | 'channel_owner' | 'platform_admin' | 'system_owner';
+type Role = 'viewer' | 'channel_moderator' | 'channel_admin' | 'channel_owner';
 
 const roleOptions: Array<{ value: Role; label: string; icon: string }> = [
   { value: 'viewer', label: 'Viewer', icon: '👤' },
   { value: 'channel_moderator', label: 'Moderator', icon: '🛡️' },
   { value: 'channel_admin', label: 'Channel Admin', icon: '⚙️' },
-  { value: 'channel_owner', label: 'Channel Owner', icon: '👑' },
-  { value: 'platform_admin', label: 'Platform Admin', icon: '🏢' },
-  { value: 'system_owner', label: 'System Owner', icon: '🧠' }
+  { value: 'channel_owner', label: 'Channel Owner', icon: '👑' }
 ];
 
 const roleIcon = (role?: Role) => roleOptions.find((x) => x.value === role)?.icon || '👤';
