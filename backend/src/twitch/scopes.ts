@@ -6,7 +6,9 @@ export const TWITCH_BROADCASTER_SCOPES = [
   // Bot permission scope used by EventSub chat subscriptions for broadcaster context.
   'channel:bot',
   // Needed to read current chatters via Helix chatters endpoint.
-  'moderator:read:chatters'
+  'moderator:read:chatters',
+  // Needed for manual moderation actions (timeout/ban/unban) via Helix moderation bans endpoint.
+  'moderator:manage:banned_users'
 ] as const;
 
 export const TWITCH_BOT_ACCOUNT_SCOPES = [
