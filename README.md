@@ -532,6 +532,16 @@ Alle Rollen- und Moderationsaktionen werden in Audit- und Event-Logs protokollie
 - Nur Admins (`system_owner`, `platform_admin`) können den globalen Plattform-Bot verbinden.
 - Optionaler Fallback: `TWITCH_ALLOW_BROADCASTER_SEND_FALLBACK` (empfohlen: development `true`, production `false`).
 
+## Plattform-Bot in Channel holen
+
+- Der globale Plattform-Bot gehört zur Plattform und wird zentral vom Betreiber verbunden.
+- Streamer verbinden nur ihren eigenen Twitch-Channel per Broadcaster OAuth.
+- Danach kann der Bot in den Channel geholt werden:
+  1. Automatisch über StreamForge, wenn der Broadcaster-Token den Scope `channel:manage:moderators` hat.
+  2. Manuell im Twitch-Chat mit `/mod BOTLOGIN`.
+- Danach in der Integrationsseite auf **Status prüfen** bzw. **Status erneut prüfen** klicken.
+- Wenn der Scope fehlt: Twitch-Kanal erneut verbinden, damit der Token `channel:manage:moderators` enthält.
+
 ## Channel Settings
 
 Unter `/dashboard/channels/:channelId/settings`:
