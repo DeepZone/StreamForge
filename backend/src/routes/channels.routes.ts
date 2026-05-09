@@ -17,6 +17,7 @@ const roleActionSchema = z.object({
 }).strict();
 const requiredRoleScopes = ['channel:manage:moderators', 'channel:read:vips', 'channel:manage:vips'] as const;
 const moderationScope = 'moderator:manage:banned_users';
+const platformBotModeratorScope = 'channel:manage:moderators';
 const moderationActionSchema = z.object({ action: z.enum(['timeout','ban','unban']), username: z.string().max(100).optional(), durationSeconds: z.number().int().min(1).max(1209600).optional(), reason: z.string().max(500).optional() }).strict();
 
 const channelsRoutes: FastifyPluginAsync = async (app) => {
@@ -250,20 +251,60 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     const bot = await prisma.platformTwitchBot.findFirst({ where: { isActive: true }, orderBy: { updatedAt: 'desc' } });
-    if (!channel || !bot) return rep.code(400).send({ errorCode: 'twitch.platform_bot.not_connected' });
-    let accessToken='';
-    try { accessToken = decryptSecret(bot.accessTokenEncrypted); } catch { return rep.code(400).send({ errorCode: 'twitch.platform_bot.not_connected' }); }
-    let isModerator = false;
+    const token = await prisma.twitchToken.findUnique({ where: { channelId } });
+    const debug = {
+      channelId,
+      twitchChannelId: channel?.twitchChannelId ?? null,
+      channelLogin: channel?.twitchLogin ?? null,
+      botLogin: bot?.twitchLogin ?? null,
+      botTwitchUserId: bot?.twitchUserId ?? null,
+      hasChannelToken: Boolean(token),
+      tokenScopes: [] as string[],
+      requiredScopes: [platformBotModeratorScope]
+    };
+    const problem = (errorCode: string, status: number, detail: string, extra?: Record<string, unknown>) => rep.code(status).send({ errorCode, status, detail, requestId: req.id, debug: { ...debug, ...(extra || {}) } });
+
+    if (!channel) return problem('channel.not_found', 404, 'Channel wurde nicht gefunden.');
+    if (!bot) return problem('twitch.platform_bot.not_configured', 400, 'Kein globaler Plattform-Bot ist konfiguriert.');
+    if (!token) return problem('twitch.platform_bot.channel_token_missing', 400, 'Für diesen Channel fehlt ein Twitch-Broadcaster-Token.');
+
+    let accessToken = ''; let refreshToken = ''; let scopes: string[] = [];
+    try {
+      accessToken = decryptSecret(token.accessTokenEncrypted);
+      refreshToken = decryptSecret(token.refreshTokenEncrypted);
+      scopes = JSON.parse(token.scopesJson || '[]');
+      debug.tokenScopes = scopes;
+    } catch {
+      return problem('twitch.platform_bot.channel_token_missing', 400, 'Für diesen Channel fehlt ein gültiges Twitch-Broadcaster-Token.');
+    }
+
+    if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) {
+      try {
+        const refreshed = await twitchApi.refreshAccessToken(refreshToken);
+        accessToken = refreshed.access_token;
+        scopes = refreshed.scope ?? scopes;
+        debug.tokenScopes = scopes;
+        await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } });
+      } catch {
+        return problem('twitch.platform_bot.channel_token_missing', 400, 'Für diesen Channel fehlt ein gültiges Twitch-Broadcaster-Token.');
+      }
+    }
+
+    const missingScopes = [platformBotModeratorScope].filter((scope) => !scopes.includes(scope));
+    if (missingScopes.length) {
+      return problem('twitch.platform_bot.scope_missing', 400, 'Dem Twitch-Token fehlt die Berechtigung, Moderatorstatus zu prüfen.', { missingScopes });
+    }
+
     try {
       const mods = await twitchApi.getChannelModerators({ broadcasterId: channel.twitchChannelId, accessToken, userId: bot.twitchUserId, first: 1 });
-      isModerator = mods.data.length > 0;
+      const isModerator = mods.data.length > 0;
+      const checkedAt = new Date();
+      await prisma.channelBotStatus.upsert({ where: { channelId }, create: { channelId, platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt, lastError: isModerator ? null : 'not_moderator' }, update: { platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt, lastError: isModerator ? null : 'not_moderator' } });
+      return { isModerator, botLogin: bot.twitchLogin, instruction: `/mod ${bot.twitchLogin}`, checkedAt: checkedAt.toISOString() };
     } catch (e: any) {
-      if (e instanceof TwitchApiError && e.status === 403) return rep.code(400).send({ errorCode: 'twitch.platform_bot.moderator_check_scope_missing', botLogin: bot.twitchLogin, instruction: `/mod ${bot.twitchLogin}`, checkedAt: new Date().toISOString() });
-      return rep.code(502).send({ errorCode: 'twitch.platform_bot.check_failed', botLogin: bot.twitchLogin, instruction: `/mod ${bot.twitchLogin}`, checkedAt: new Date().toISOString() });
+      if (e instanceof TwitchApiError) return problem('twitch.platform_bot.api_failed', 502, 'Twitch API Fehler beim Abruf der Moderatorliste.', { twitchStatus: e.status, twitchSafeMessage: e.safeMessage });
+      return problem('twitch.platform_bot.check_failed', 500, 'Unerwarteter Fehler bei der Moderatorstatus-Prüfung.');
     }
-    const checkedAt = new Date();
-    await prisma.channelBotStatus.upsert({ where: { channelId }, create: { channelId, platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt }, update: { platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt } });
-    return { isModerator, botLogin: bot.twitchLogin, instruction: `/mod ${bot.twitchLogin}`, checkedAt: checkedAt.toISOString() };
   });
 };
 export default channelsRoutes;

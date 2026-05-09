@@ -12,7 +12,7 @@ export default function IntegrationsPage() {
   const { user } = useAuth() as any;
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
-  const [checkError, setCheckError] = useState('');
+  const [checkError, setCheckError] = useState<any>(null);
   const isAdmin = ['system_owner', 'platform_admin'].includes(user?.role || '');
   const load = async () => { setError(''); setData(await apiGet(`/api/channels/${channelId}/twitch/bot`)); };
   useEffect(() => { if (channelId) load().catch(() => setError('Integrationen konnten nicht geladen werden.')); }, [channelId]);
@@ -27,9 +27,11 @@ export default function IntegrationsPage() {
         <div>Plattform-Bot: <b>{data.botLogin}</b></div>
         <div>Führe in deinem Twitch-Chat aus: <code>{data.instruction}</code></div>
         <div>Status: {data.isModerator ? 'bereit' : 'Bot ist noch kein Moderator'}</div>
-        {data.isModerator && <div className='text-emerald-300'>StreamForge sendet in diesem Channel als {data.botLogin}.</div>}
-        {checkError && <ErrorBox message={checkError} />}
-        <Button onClick={async () => { setCheckError(''); try { await apiPost(`/api/channels/${channelId}/twitch/bot/check`); await load(); } catch (e: any) { setCheckError(e?.data?.errorCode || 'Prüfung fehlgeschlagen'); } }}>Moderatorstatus prüfen</Button>
+        {data.isModerator && <div className='text-emerald-300'>{data.botLogin} ist Moderator in deinem Channel. StreamForge kann als {data.botLogin} antworten.</div>}
+        {!data.isModerator && <div className='text-amber-300'>{data.botLogin} wurde noch nicht als Moderator erkannt. <code>/mod {data.botLogin}</code></div>}
+        {checkError && <ErrorBox message={checkError.detail || checkError.errorCode || 'Prüfung fehlgeschlagen'} details={checkError.debug} />}
+        {checkError?.errorCode === 'twitch.platform_bot.scope_missing' && <div className='text-amber-200'>Bitte Twitch erneut verbinden, damit StreamForge den Moderatorstatus prüfen kann. <Link className='underline text-blue-300' to='/api/auth/twitch/start'>Twitch erneut verbinden</Link></div>}
+        <Button onClick={async () => { setCheckError(null); try { await apiPost(`/api/channels/${channelId}/twitch/bot/check`); await load(); } catch (e: any) { setCheckError(e?.data || { errorCode: 'twitch.platform_bot.check_failed', detail: 'Prüfung fehlgeschlagen' }); } }}>Moderatorstatus prüfen</Button>
       </>}
     </Card>
   </div>;
