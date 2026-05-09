@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { Role } from '@prisma/client';
 import { isAdmin, requireAuth, AuthedRequest } from '../auth/guards.js';
 import { env } from '../config/env.js';
+import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
 import { twitchConnectionManager } from '../twitch/managerSingleton.js';
 import { audit } from '../services/auditService.js';
 
@@ -38,7 +39,8 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       hasClientId: Boolean(env.twitchClientId),
       hasClientSecret: Boolean(env.twitchClientSecret),
       hasTokenEncryptionKey: Boolean(env.tokenKey),
-      scopes: ['chat:read', 'chat:edit', 'moderator:read:followers']
+      tokenEncryptionKeyValid: /^[0-9a-fA-F]{64}$/u.test(env.tokenKey),
+      scopes: [...TWITCH_MVP_SCOPES]
     };
   });
   app.post('/api/admin/twitch/sessions/start-all', { preHandler: requireAuth }, async (req, rep) => {
