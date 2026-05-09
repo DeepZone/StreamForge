@@ -1,65 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet } from '../api/client';
+import Card from '../components/ui/Card';
+import LoadingState from '../components/ui/LoadingState';
+import ErrorBox from '../components/ui/ErrorBox';
+import PageHeader from '../components/ui/PageHeader';
 
-type Command = { id: string };
-type Timer = { id: string };
-type Recap = { id: string; createdAt: string };
-type Radar = { summary?: Record<string, unknown> };
-
-export default function DashboardHome() {
-  const { channelId = '' } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [stats, setStats] = useState({ commandCount: 0, timerCount: 0, lastCommunityActivity: 'Noch keine Daten', lastRecap: 'Noch keine Daten' });
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [commands, timers, recaps, radar] = await Promise.allSettled([
-          apiGet<Command[]>(`/api/channels/${channelId}/commands`),
-          apiGet<Timer[]>(`/api/channels/${channelId}/timers`),
-          apiGet<Recap[]>(`/api/channels/${channelId}/recaps`),
-          apiGet<Radar>(`/api/channels/${channelId}/community/radar`)
-        ]);
-
-        setStats({
-          commandCount: commands.status === 'fulfilled' ? commands.value.length : 0,
-          timerCount: timers.status === 'fulfilled' ? timers.value.length : 0,
-          lastRecap: recaps.status === 'fulfilled' && recaps.value[0] ? new Date(recaps.value[0].createdAt).toLocaleString() : 'Noch keine Daten',
-          lastCommunityActivity: radar.status === 'fulfilled' && radar.value?.summary ? JSON.stringify(radar.value.summary) : 'Noch keine Daten'
-        });
-      } catch {
-        setError('Übersicht konnte nicht vollständig geladen werden.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [channelId]);
-
-  const quickLinks = [
-    ['Commands', 'commands'],
-    ['Timers', 'timers'],
-    ['Community Radar', 'community'],
-    ['Recaps', 'recaps']
-  ];
-
-  return <div className='space-y-4'>
-    <h1 className='text-2xl font-semibold'>Dashboard Übersicht</h1>
-    <p className='text-slate-300'>Channel ID: <span className='font-mono'>{channelId}</span></p>
-    {loading ? <p>Lade Übersicht…</p> : null}
-    {error ? <p className='rounded border border-red-700 bg-red-950 p-3 text-red-300'>{error}</p> : null}
-    <div className='grid md:grid-cols-2 gap-3'>
-      <div className='rounded border border-slate-800 p-3'>Commands: {stats.commandCount}</div>
-      <div className='rounded border border-slate-800 p-3'>Timers: {stats.timerCount}</div>
-      <div className='rounded border border-slate-800 p-3'>Letzte Community-Aktivität: {stats.lastCommunityActivity}</div>
-      <div className='rounded border border-slate-800 p-3'>Letzter Recap: {stats.lastRecap}</div>
-    </div>
-    <div className='flex gap-2 flex-wrap'>
-      {quickLinks.map(([label, segment]) => <Link key={segment} className='rounded bg-slate-800 px-3 py-2 text-sm' to={`/dashboard/channels/${channelId}/${segment}`}>{label}</Link>)}
-    </div>
-  </div>;
-}
+type S={commandCount:number;timerCount:number;lastChat:string;botEvents:any[];botEnabled:boolean;eventSubEnabled:boolean};
+export default function DashboardHome(){const {channelId=''}=useParams(); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [s,setS]=useState<S>({commandCount:0,timerCount:0,lastChat:'-',botEvents:[],botEnabled:false,eventSubEnabled:false});
+useEffect(()=>{const load=async()=>{setLoading(true);setError('');try{const [commands,timers,logs,channel,health]=await Promise.all([apiGet<any[]>(`/api/channels/${channelId}/commands`),apiGet<any[]>(`/api/channels/${channelId}/timers`),apiGet<{items:any[]}>(`/api/channels/${channelId}/logs?limit=5`),apiGet<any>(`/api/channels/${channelId}`),apiGet<any>('/api/admin/health').catch(()=>null)]); setS({commandCount:commands.length,timerCount:timers.length,lastChat:logs.items.find((i)=>i.eventType?.includes('chat'))?.createdAt??'-',botEvents:logs.items,botEnabled:channel?.botEnabled??false,eventSubEnabled:health?.twitch?.eventSubEnabled??false});}catch(e:any){setError(e?.data?.detail??'Übersicht konnte nicht geladen werden.');}finally{setLoading(false);}}; void load();},[channelId]);
+return <div className='space-y-4'><PageHeader title='Dashboard Übersicht' subtitle='Produktionsnahe Live-Übersicht für den ausgewählten Channel.'/>{loading&&<LoadingState label='Lade Übersicht…'/>}{error&&<ErrorBox message={error}/>}<div className='grid md:grid-cols-3 gap-3'><Card className='p-3'>Bot Status: <b>{s.botEnabled?'Aktiv':'Deaktiviert'}</b></Card><Card className='p-3'>EventSub: <b>{s.eventSubEnabled?'Aktiv':'Inaktiv'}</b></Card><Card className='p-3'>Letzte Chatnachricht: <b>{s.lastChat==='-'?'-':new Date(s.lastChat).toLocaleString()}</b></Card><Card className='p-3'>Commands: <b>{s.commandCount}</b></Card><Card className='p-3'>Timer: <b>{s.timerCount}</b></Card><Card className='p-3'>BotEvents (letzte 5): <b>{s.botEvents.length}</b></Card></div><Card className='p-3'><div className='font-semibold mb-2'>Quick Actions</div><div className='flex gap-2 flex-wrap'><Link className='rounded bg-indigo-600 px-3 py-2 text-sm' to={`/dashboard/channels/${channelId}/commands`}>Command erstellen</Link><Link className='rounded bg-indigo-600 px-3 py-2 text-sm' to={`/dashboard/channels/${channelId}/timers`}>Timer erstellen</Link><Link className='rounded bg-zinc-700 px-3 py-2 text-sm' to={`/dashboard/channels/${channelId}/community`}>Community Radar öffnen</Link><Link className='rounded bg-zinc-700 px-3 py-2 text-sm' to={`/dashboard/channels/${channelId}/logs`}>Logs öffnen</Link></div></Card></div>}
