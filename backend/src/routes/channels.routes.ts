@@ -5,10 +5,17 @@ import { AuthedRequest, isAdmin, requireAuth, requireChannelRole } from '../auth
 import { decryptSecret, encryptSecret } from '../utils/crypto.js';
 import { TwitchApi, TwitchApiError } from '../twitch/TwitchApi.js';
 import { eventBus } from '../core/EventBus.js';
+import { z } from 'zod';
 
 const twitchApi = new TwitchApi();
 
 const twitchChannelRoles: Role[] = ['viewer', 'channel_moderator', 'channel_admin', 'channel_owner'];
+
+const roleActionSchema = z.object({
+  action: z.enum(['make_moderator', 'remove_moderator', 'make_vip', 'remove_vip']),
+  username: z.string().max(100).optional()
+}).strict();
+const requiredRoleScopes = ['channel:manage:moderators', 'channel:read:vips', 'channel:manage:vips'] as const;
 
 const channelsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/channels', { preHandler: requireAuth }, async (req) => {
@@ -71,6 +78,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     req.raw.on('close', () => { clearInterval(keepalive); eventBus.unsubscribe(channelId, handler); rep.raw.end(); });
   });
 
+
   app.get('/api/channels/:channelId/twitch/chatters', { preHandler: requireAuth }, async (req, rep) => {
     await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
     const { channelId } = req.params as { channelId: string };
@@ -79,59 +87,90 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
     const token = await prisma.twitchToken.findUnique({ where: { channelId } });
-    if (!token) return rep.code(400).send({ errorCode: 'twitch.chatters.token_error' });
-    let accessToken = '';
-    let refreshToken = '';
-    let scopes: string[] = [];
-    try {
-      accessToken = decryptSecret(token.accessTokenEncrypted);
-      refreshToken = decryptSecret(token.refreshTokenEncrypted);
-      scopes = JSON.parse(token.scopesJson || '[]');
-    } catch { return rep.code(400).send({ errorCode: 'twitch.chatters.token_error' }); }
-    if (!scopes.includes('moderator:read:chatters')) return rep.code(400).send({ errorCode: 'twitch.chatters.missing_scope', detail: 'Bitte Twitch neu verbinden.' });
+    if (!token) return rep.code(400).send({ errorCode: 'twitch.roles.auth_required' });
+    let accessToken = ''; let refreshToken = ''; let scopes: string[] = [];
+    try { accessToken = decryptSecret(token.accessTokenEncrypted); refreshToken = decryptSecret(token.refreshTokenEncrypted); scopes = JSON.parse(token.scopesJson || '[]'); } catch { return rep.code(400).send({ errorCode: 'twitch.roles.auth_required' }); }
     if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) {
-      try {
-        const refreshed = await twitchApi.refreshAccessToken(refreshToken);
-        accessToken = refreshed.access_token;
-        scopes = refreshed.scope ?? scopes;
-        await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } });
-      } catch { return rep.code(400).send({ errorCode: 'twitch.chatters.token_error' }); }
+      try { const refreshed = await twitchApi.refreshAccessToken(refreshToken); accessToken = refreshed.access_token; scopes = refreshed.scope ?? scopes; await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } }); } catch { return rep.code(400).send({ errorCode: 'twitch.roles.auth_required' }); }
     }
     try {
       const result = await twitchApi.getChatters({ broadcasterId: channel.twitchChannelId, moderatorId: channel.twitchChannelId, accessToken, first });
       const ids = result.data.map((d) => d.user_id);
       const community = ids.length ? await prisma.communityUser.findMany({ where: { channelId, platform: Platform.twitch, externalUserId: { in: ids } } }) : [];
       const cMap = new Map(community.map((c) => [c.externalUserId, c]));
-      return { total: result.total ?? result.data.length, updatedAt: new Date().toISOString(), note: 'Twitch aktualisiert die Chatters-Liste verzögert.', items: result.data.map((x) => ({ userId: x.user_id, userLogin: x.user_login, userName: x.user_name, firstSeenAt: cMap.get(x.user_id)?.firstSeenAt ?? null, lastSeenAt: cMap.get(x.user_id)?.lastSeenAt ?? null, messageCount: cMap.get(x.user_id)?.messageCount ?? 0, commandCount: cMap.get(x.user_id)?.commandCount ?? 0 })) };
+      const missingScopes = requiredRoleScopes.filter((x) => !scopes.includes(x));
+      let modSet = new Set<string>(); let vipSet = new Set<string>();
+      const roleStatusAvailable = missingScopes.length === 0;
+      if (roleStatusAvailable) {
+        try {
+          let after: string | undefined;
+          do { const mods = await twitchApi.getChannelModerators({ broadcasterId: channel.twitchChannelId, accessToken, first: 100, after }); mods.data.forEach((m) => modSet.add(m.user_id)); after = mods.pagination?.cursor; } while (after);
+          after = undefined;
+          do { const vips = await twitchApi.getChannelVips({ broadcasterId: channel.twitchChannelId, accessToken, first: 100, after }); vips.data.forEach((v) => vipSet.add(v.user_id)); after = vips.pagination?.cursor; } while (after);
+        } catch {}
+      }
+      const items = result.data.map((x) => {
+        const isBroadcaster = x.user_id === channel.twitchChannelId;
+        const isMod = modSet.has(x.user_id);
+        const isVip = vipSet.has(x.user_id);
+        const role = !roleStatusAvailable ? 'unknown' : isBroadcaster ? 'broadcaster' : isMod ? 'moderator' : isVip ? 'vip' : 'viewer';
+        return { userId: x.user_id, userLogin: x.user_login, userName: x.user_name, role, roleCapabilities: { canMakeModerator: roleStatusAvailable && !isBroadcaster && !isMod, canRemoveModerator: roleStatusAvailable && !isBroadcaster && isMod, canMakeVip: roleStatusAvailable && !isBroadcaster && !isVip && !isMod, canRemoveVip: roleStatusAvailable && !isBroadcaster && isVip }, firstSeenAt: cMap.get(x.user_id)?.firstSeenAt ?? null, lastSeenAt: cMap.get(x.user_id)?.lastSeenAt ?? null, messageCount: cMap.get(x.user_id)?.messageCount ?? 0, commandCount: cMap.get(x.user_id)?.commandCount ?? 0 };
+      });
+      return { total: result.total ?? result.data.length, updatedAt: new Date().toISOString(), note: 'Twitch aktualisiert die Chatters-Liste verzögert.', roleStatusAvailable, missingScopes, items };
     } catch (e: any) {
       if (e instanceof TwitchApiError && e.status === 403) return rep.code(400).send({ errorCode: 'twitch.chatters.missing_scope', detail: 'Bitte Twitch neu verbinden.' });
       return rep.code(502).send({ errorCode: 'twitch.chatters.fetch_failed' });
     }
   });
 
+  app.post('/api/channels/:channelId/twitch/chatters/:userId/role', { preHandler: requireAuth }, async (req: any, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
+    const body = roleActionSchema.safeParse(req.body);
+    if (!body.success) return rep.code(400).send({ errorCode: 'validation.failed', details: body.error.issues });
+    const { channelId, userId } = req.params as { channelId: string; userId: string };
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
+    if (userId === channel.twitchChannelId) return rep.code(409).send({ errorCode: 'twitch.roles.cannot_modify_broadcaster' });
+    const token = await prisma.twitchToken.findUnique({ where: { channelId } });
+    if (!token) return rep.code(400).send({ errorCode: 'twitch.roles.auth_required' });
+    let accessToken=''; let refreshToken=''; let scopes:string[]=[];
+    try { accessToken = decryptSecret(token.accessTokenEncrypted); refreshToken = decryptSecret(token.refreshTokenEncrypted); scopes = JSON.parse(token.scopesJson || '[]'); } catch { return rep.code(400).send({ errorCode: 'twitch.roles.auth_required' }); }
+    if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) { try { const refreshed = await twitchApi.refreshAccessToken(refreshToken); accessToken = refreshed.access_token; scopes = refreshed.scope ?? scopes; await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } }); } catch { return rep.code(400).send({ errorCode: 'twitch.roles.auth_required' }); } }
+    const missing = requiredRoleScopes.filter((x) => !scopes.includes(x));
+    if (missing.length) return rep.code(400).send({ errorCode: 'twitch.roles.scope_missing', missingScopes: missing });
+    try {
+      const isMod = (await twitchApi.getChannelModerators({ broadcasterId: channel.twitchChannelId, userId, accessToken, first: 1 })).data.length > 0;
+      const isVip = (await twitchApi.getChannelVips({ broadcasterId: channel.twitchChannelId, userId, accessToken, first: 1 })).data.length > 0;
+      const action = body.data.action;
+      if (action === 'make_moderator' && isMod) return rep.code(409).send({ errorCode: 'twitch.roles.already_moderator' });
+      if (action === 'remove_moderator' && !isMod) return rep.code(409).send({ errorCode: 'twitch.roles.not_moderator' });
+      if (action === 'make_vip' && isVip) return rep.code(409).send({ errorCode: 'twitch.roles.already_vip' });
+      if (action === 'remove_vip' && !isVip) return rep.code(409).send({ errorCode: 'twitch.roles.not_vip' });
+      if (action === 'make_moderator') await twitchApi.addChannelModerator({ broadcasterId: channel.twitchChannelId, userId, accessToken });
+      if (action === 'remove_moderator') await twitchApi.removeChannelModerator({ broadcasterId: channel.twitchChannelId, userId, accessToken });
+      if (action === 'make_vip') await twitchApi.addChannelVip({ broadcasterId: channel.twitchChannelId, userId, accessToken });
+      if (action === 'remove_vip') await twitchApi.removeChannelVip({ broadcasterId: channel.twitchChannelId, userId, accessToken });
+      const roleType = action.includes('moderator') ? 'moderator' : 'vip';
+      const actionType = action.startsWith('make') ? 'add' : 'remove';
+      await prisma.twitchRoleAction.create({ data: { channelId, targetExternalUserId: userId, targetUsername: body.data.username, roleType, actionType, createdByUserId: req.session.userId } });
+      await prisma.auditLog.create({ data: { channelId, userId: req.session.userId, action: `twitch.role.${action}`, detailsJson: JSON.stringify({ targetExternalUserId: userId, targetUsername: body.data.username, roleType, actionType }) } });
+      await prisma.botEvent.create({ data: { channelId, platform: Platform.twitch, eventType: 'twitch.role.changed', payloadJson: JSON.stringify({ action, targetExternalUserId: userId, targetUsername: body.data.username, roleType, actionType }) } });
+      return { ok: true, action, userId, username: body.data.username ?? null, roleAfter: actionType === 'add' ? roleType : 'viewer' };
+    } catch (e) {
+      if (e instanceof TwitchApiError) return rep.code(502).send({ errorCode: 'twitch.roles.api_failed', status: e.status, safeMessage: e.safeMessage });
+      return rep.code(502).send({ errorCode: 'twitch.roles.api_failed' });
+    }
+  });
 
-  app.get('/api/channels/:channelId/chatters/roles', { preHandler: requireAuth }, async (req, rep) => {
+  app.get('/api/channels/:channelId/twitch/role-actions', { preHandler: requireAuth }, async (req, rep) => {
     await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
     const { channelId } = req.params as { channelId: string };
-    const members = await prisma.channelMember.findMany({ where: { channelId }, include: { user: true } });
-    const rolesByLogin = Object.fromEntries(members.filter((m) => m.user.twitchLogin).map((m) => [String(m.user.twitchLogin).toLowerCase(), m.role]));
-    return { rolesByLogin };
+    const q = req.query as { limit?: string; roleType?: string; actionType?: string; username?: string };
+    const limit = Math.min(Math.max(Number(q.limit || 100), 1), 500);
+    const items = await prisma.twitchRoleAction.findMany({ where: { channelId, ...(q.roleType ? { roleType: q.roleType } : {}), ...(q.actionType ? { actionType: q.actionType } : {}), ...(q.username ? { targetUsername: { contains: q.username, mode: 'insensitive' } } : {}) }, orderBy: { createdAt: 'desc' }, take: limit });
+    return { items };
   });
 
-  app.patch('/api/channels/:channelId/chatters/roles', { preHandler: requireAuth }, async (req: any, rep) => {
-    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
-    const { channelId } = req.params as { channelId: string };
-    const { userLogin, role } = req.body as { userLogin?: string; role?: Role };
-    if (!userLogin || !role || !twitchChannelRoles.includes(role)) return rep.code(400).send({ errorCode: 'validation.invalid_payload', detail: 'Nur Twitch-Channel-Rollen sind erlaubt.' });
-    const user = await prisma.user.findFirst({ where: { twitchLogin: { equals: userLogin, mode: 'insensitive' } } });
-    if (!user) return rep.code(404).send({ errorCode: 'user.not_found', detail: 'Diese Rollenverwaltung ist nur für StreamForge-Accounts. Twitch-Rollen (z. B. Mod) änderst du direkt bei Twitch.' });
-    const member = await prisma.channelMember.upsert({
-      where: { channelId_userId: { channelId, userId: user.id } },
-      create: { channelId, userId: user.id, role },
-      update: { role }
-    });
-    return { member };
-  });
 
 
   app.get('/api/channels/:channelId/twitch/bot', { preHandler: requireAuth }, async (req, rep) => {

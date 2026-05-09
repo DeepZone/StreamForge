@@ -471,3 +471,20 @@ Diese Redirect URLs müssen **exakt** eingetragen sein:
 - Irrelevante Einzelwörter, URLs, Mentions, Zahlenfragmente und sehr kurze Tokens werden gefiltert.
 - Anzeige nur relevanter Topics inkl. Score/Keywords/MessageCount, keine rohe Wortzähl-Liste.
 - Empfehlungen sind kompakt (max. 5) und rein heuristisch, ohne personenbezogene Bewertung.
+
+## Twitch Chatters und Rollenverwaltung
+
+- Chatters zeigt aktuelle Twitch-Chatteilnehmer im Dashboard.
+- Twitch aktualisiert diese Liste verzögert.
+- Angezeigte Rollen: Broadcaster, Moderator, VIP, Viewer.
+- Über StreamForge änderbar sind nur echte Twitch-Rollen:
+  - Moderator hinzufügen/entfernen
+  - VIP hinzufügen/entfernen
+- Nicht änderbar: Subscriber, Follower, Founder, Broadcaster, Affiliate/Partner.
+- Benötigte Scopes:
+  - moderator:read:chatters
+  - channel:manage:moderators
+  - channel:read:vips
+  - channel:manage:vips
+- Nach Scope-Änderung muss Twitch OAuth erneut durchgeführt werden.
+- Alle Rollenänderungen werden in AuditLog/BotEvent/TwitchRoleAction protokolliert.

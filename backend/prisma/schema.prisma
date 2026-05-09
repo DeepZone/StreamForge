@@ -37,31 +37,32 @@ model User {
 }
 
 model Channel {
-  id              String              @id @default(cuid())
-  twitchChannelId String              @unique
-  twitchLogin     String
-  displayName     String
-  avatarUrl       String?
-  isActive        Boolean             @default(true)
-  botEnabled      Boolean             @default(true)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  members         ChannelMember[]
-  settings        ChannelSettings?
-  tokens          TwitchToken?
-  commands        Command[]
-  timers          Timer[]
-  events          BotEvent[]
-  logs            AuditLog[]
-  chats           ChatMessage[]
-  community       CommunityUser[]
-  sessions        StreamSession[]
-  recaps          StreamRecap[]
-  campaigns       Campaign[]
-  discord         DiscordIntegration?
-  notes           ModerationNote[]
-  actions         ModerationAction[]
-  botStatusLinks  ChannelBotStatus[]
+  id                String              @id @default(cuid())
+  twitchChannelId   String              @unique
+  twitchLogin       String
+  displayName       String
+  avatarUrl         String?
+  isActive          Boolean             @default(true)
+  botEnabled        Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  members           ChannelMember[]
+  settings          ChannelSettings?
+  tokens            TwitchToken?
+  commands          Command[]
+  timers            Timer[]
+  events            BotEvent[]
+  logs              AuditLog[]
+  chats             ChatMessage[]
+  community         CommunityUser[]
+  sessions          StreamSession[]
+  recaps            StreamRecap[]
+  campaigns         Campaign[]
+  discord           DiscordIntegration?
+  notes             ModerationNote[]
+  actions           ModerationAction[]
+  botStatusLinks    ChannelBotStatus[]
+  twitchRoleActions TwitchRoleAction[]
 }
 
 model PlatformTwitchBot {
@@ -303,4 +304,18 @@ model ModerationAction {
   createdByUserId      String?
   createdAt            DateTime @default(now())
   channel              Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model TwitchRoleAction {
+  id                   String   @id @default(cuid())
+  channelId            String
+  targetExternalUserId String
+  targetUsername       String?
+  actionType           String
+  roleType             String
+  createdByUserId      String?
+  createdAt            DateTime @default(now())
+  channel              Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
 }
