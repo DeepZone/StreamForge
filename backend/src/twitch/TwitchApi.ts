@@ -19,9 +19,13 @@ export class TwitchApiError extends Error {
 
 export class TwitchApi {
   private async parseResponse<T>(res: Response, context: string): Promise<T> {
-    const body = await res.json().catch(() => ({}));
+    const rawText = await res.text();
+    let body: any = {};
+    if (rawText) {
+      try { body = JSON.parse(rawText); } catch { body = { message: rawText.slice(0, 300) }; }
+    }
     if (!res.ok) {
-      const safeMessage = typeof body?.message === 'string' ? body.message : (typeof body?.error === 'string' ? body.error : `twitch_${context}_failed`);
+      const safeMessage = typeof body?.message === 'string' ? body.message : (typeof body?.error_description === 'string' ? body.error_description : (typeof body?.error === 'string' ? body.error : `twitch_${context}_failed`));
       throw new TwitchApiError(context, res.status, safeMessage);
     }
     return body as T;

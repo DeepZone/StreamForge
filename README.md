@@ -230,29 +230,49 @@ Das Dashboard ist jetzt als dunkles SaaS-UI über `/channels` erreichbar.
 - Local LAN: `VITE_API_URL=http://192.168.58.158:8000`
 - If `VITE_API_URL` is empty, frontend now defaults to current origin (same-domain mode).
 
-## Twitch OAuth Callback Fehlerdiagnose
+## Twitch OAuth Callback Debugging
 
 ### Schnellchecks
 
 ```bash
+docker compose logs backend --tail=200
+docker compose exec backend printenv | grep -E 'TWITCH|TOKEN|PUBLIC|FRONTEND|BACKEND|COOKIE|NODE_ENV'
 curl -i https://www.streamforge-bot.com/api/auth/twitch/start
-docker compose logs backend --tail=150
-docker compose exec backend printenv | grep -E 'TWITCH|TOKEN|PUBLIC|FRONTEND|BACKEND'
 ```
 
-### Häufige Fehlercodes
+### OAuth-State Cookie prüfen
 
-- `twitch.oauth.invalid_state`  
-  Ursache: Cookie/Session/Domain/SameSite/Reverse-Proxy-Konfiguration verhindert konsistente OAuth-Session.
-- `twitch.oauth.token_exchange_failed`  
-  Ursache: Redirect URI stimmt nicht exakt mit der Twitch Developer Console überein oder Client Secret ist falsch.
-- `twitch.oauth.token_encryption_failed`  
-  Ursache: `TOKEN_ENCRYPTION_KEY` fehlt oder hat nicht exakt 64 Hex-Zeichen (`openssl rand -hex 32`).
-- `twitch.oauth.persistence_failed`  
-  Ursache: Prisma/DB/Unique-Constraint/Schema-Problem.
-- `twitch.oauth.userinfo_failed`  
-  Ursache: Access Token ungültig oder Twitch API Fehler.
+- Browser DevTools → Application → Cookies öffnen.
+- Nach `/api/auth/twitch/start` muss `sf_twitch_oauth_state` gesetzt sein.
+- Callback muss auf derselben Domain erfolgen (`https://www.streamforge-bot.com`).
+- In HTTPS-Setups `COOKIE_SECURE=true` setzen.
+- Für den State-Cookie gilt: `HttpOnly`, `SameSite=Lax`, `Path=/api/auth/twitch`, in Production `Secure=true`.
+
+### Häufige Fehler
+
+- `twitch.oauth.invalid_state`
+  - State-Cookie fehlt.
+  - Cookie `Secure`/`SameSite`/`Path` falsch.
+  - Callback läuft auf anderer Domain.
+  - Reverse Proxy reicht Cookie nicht sauber durch.
+
+- `twitch.oauth.token_exchange_failed`
+  - Client Secret falsch.
+  - Redirect URI stimmt nicht exakt.
+  - OAuth-Code bereits verbraucht.
+  - Twitch API lehnt Request ab.
+
+- `twitch.oauth.token_encryption_failed`
+  - `TOKEN_ENCRYPTION_KEY` fehlt.
+  - `TOKEN_ENCRYPTION_KEY` ist nicht 64 Hex-Zeichen.
+  - Lösung: `openssl rand -hex 32`.
+
+- `twitch.oauth.persistence_failed`
+  - Prisma Schema/DB Problem.
+  - Unique Constraint.
+  - Ungültiges Datenformat.
 
 ### EventSub Hinweis
 
-Für den ersten OAuth-Test `TWITCH_EVENTSUB_ENABLED=false` setzen. Erst nach erfolgreichem Login und gespeicherten `TwitchToken` auf `true` umstellen und Backend neu starten.
+Für OAuth-Tests `TWITCH_EVENTSUB_ENABLED=false` setzen.
+Erst nach erfolgreichem OAuth-Login und gespeicherten Tokens auf `true` setzen und Backend neu starten.

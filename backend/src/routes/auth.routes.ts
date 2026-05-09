@@ -3,7 +3,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { verifyPassword } from '../auth/password.js';
-import { clearSession, getSession, setSession } from '../auth/session.js';
+import { clearSession, clearTwitchOAuthState, getSession, getTwitchOAuthState, setSession, setTwitchOAuthState } from '../auth/session.js';
 import { requireAuth, AuthedRequest } from '../auth/guards.js';
 import { assertTokenEncryptionKey, assertTwitchOAuthConfig, env, getMissingTwitchOAuthEnvVars } from '../config/env.js';
 import { TwitchApi, TwitchApiError } from '../twitch/TwitchApi.js';
@@ -21,6 +21,7 @@ type CallbackErrorCode =
   | 'twitch.oauth.userinfo_failed'
   | 'twitch.oauth.token_encryption_failed'
   | 'twitch.oauth.persistence_failed'
+  | 'twitch.oauth.provider_error'
   | 'twitch.oauth.callback_failed';
 
 const createRequestId = () => crypto.randomUUID();
@@ -79,7 +80,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     try {
       assertTwitchOAuthConfig();
       const state = crypto.randomBytes(32).toString('hex');
-      setSession(rep, { ...(getSession(req) || {}), twitchState: state } as any);
+      setTwitchOAuthState(rep, state);
       const url = new URL('https://id.twitch.tv/oauth2/authorize');
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('client_id', env.twitchClientId);
@@ -98,35 +99,54 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     const requestId = createRequestId();
     try {
       assertTwitchOAuthConfig();
-      const { code, state } = req.query as { code?: string; state?: string };
-      const currentSession = getSession(req);
+      const query = req.query as { code?: string; state?: string; error?: string; error_description?: string };
+      const { code, state } = query;
 
-      if (!code) {
-        return sendCallbackError(rep, 400, 'twitch.oauth.missing_code', requestId, 'OAuth-Code fehlt.');
+      if (query.error) {
+        const hint = query.error === 'redirect_mismatch' ? 'Die konfigurierte Redirect-URI stimmt nicht exakt mit Twitch überein.' : 'Prüfe Twitch OAuth-Parameter und App-Konfiguration.';
+        return rep.code(400).send({ errorCode: 'twitch.oauth.provider_error', requestId, providerError: query.error, providerDescription: query.error_description, hint });
       }
-      if (!state) {
-        return sendCallbackError(rep, 400, 'twitch.oauth.missing_state', requestId, 'OAuth-State fehlt.');
-      }
-      if (!currentSession?.twitchState || state !== currentSession.twitchState) {
-        return sendCallbackError(rep, 400, 'twitch.oauth.invalid_state', requestId, 'OAuth-State ist ungültig oder abgelaufen.');
-      }
+      if (!code) return sendCallbackError(rep, 400, 'twitch.oauth.missing_code', requestId, 'Twitch Callback enthält keinen OAuth-Code.');
+      if (!state) return sendCallbackError(rep, 400, 'twitch.oauth.missing_state', requestId, 'Twitch Callback enthält keinen OAuth-State.');
 
-      const { twitchState: _twitchState, ...sessionWithoutState } = currentSession;
-      setSession(rep, sessionWithoutState as any);
+      const storedState = getTwitchOAuthState(req);
+      const hasSession = Boolean(getSession(req));
+      const hasStoredState = Boolean(storedState);
+      const hasReturnedState = Boolean(state);
+      const cookiePresent = Boolean((req.cookies as Record<string, string>).sf_twitch_oauth_state);
+
+      if (!storedState || state !== storedState) {
+        clearTwitchOAuthState(rep);
+        return sendCallbackError(rep, 400, 'twitch.oauth.invalid_state', requestId, 'OAuth-State ist ungültig oder abgelaufen.', { hasSession, hasStoredState, hasReturnedState, cookiePresent });
+      }
+      clearTwitchOAuthState(rep);
 
       const tokens = await twitchApi.exchangeCodeForToken(code);
       const twitchUser = await twitchApi.getCurrentUser(tokens.access_token);
+
+      const hasTokenEncryptionKey = Boolean(env.tokenKey);
+      const tokenKeyValid = /^[0-9a-fA-F]{64}$/u.test(env.tokenKey);
+      if (!hasTokenEncryptionKey || !tokenKeyValid) {
+        return sendCallbackError(rep, 500, 'twitch.oauth.token_encryption_failed', requestId, 'TOKEN_ENCRYPTION_KEY ist nicht korrekt konfiguriert.', { ...buildCallbackDebug(), hasTokenEncryptionKey, tokenKeyValid });
+      }
       assertTokenEncryptionKey();
 
       const result = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.upsert({ where: { twitchUserId: twitchUser.id }, create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }, update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url } });
-        const channel = await tx.channel.upsert({ where: { twitchChannelId: twitchUser.id }, create: { twitchChannelId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }, update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url } });
-        await tx.channelSettings.upsert({ where: { channelId: channel.id }, create: { channelId: channel.id }, update: {} });
-        await tx.command.upsert({ where: { channelId_name: { channelId: channel.id, name: 'ping' } }, create: { channelId: channel.id, name: 'ping', aliasesJson: '[]', response: 'pong', conditionsJson: '{}' }, update: {} });
-        await tx.channelMember.upsert({ where: { channelId_userId: { channelId: channel.id, userId: user.id } }, create: { channelId: channel.id, userId: user.id, role: 'channel_owner' }, update: { role: 'channel_owner' } });
-        const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
-        const scopesJson = JSON.stringify(tokens.scope ?? []);
-        await tx.twitchToken.upsert({ where: { channelId: channel.id }, create: { channelId: channel.id, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson, expiresAt }, update: { accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson, expiresAt } });
+        let user; let channel;
+        try {
+          user = await tx.user.upsert({ where: { twitchUserId: twitchUser.id }, create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }, update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url } });
+        } catch (error) { throw { step: 'user_upsert_failed', cause: error }; }
+        try {
+          channel = await tx.channel.upsert({ where: { twitchChannelId: twitchUser.id }, create: { twitchChannelId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url }, update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url } });
+        } catch (error) { throw { step: 'channel_upsert_failed', cause: error }; }
+        try { await tx.channelSettings.upsert({ where: { channelId: channel.id }, create: { channelId: channel.id }, update: {} }); } catch (error) { throw { step: 'channel_settings_upsert_failed', cause: error }; }
+        try { await tx.command.upsert({ where: { channelId_name: { channelId: channel.id, name: 'ping' } }, create: { channelId: channel.id, name: 'ping', aliasesJson: '[]', response: 'pong', conditionsJson: '{}' }, update: {} }); } catch (error) { throw { step: 'ping_command_upsert_failed', cause: error }; }
+        try { await tx.channelMember.upsert({ where: { channelId_userId: { channelId: channel.id, userId: user.id } }, create: { channelId: channel.id, userId: user.id, role: 'channel_owner' }, update: { role: 'channel_owner' } }); } catch (error) { throw { step: 'channel_member_upsert_failed', cause: error }; }
+        try {
+          const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+          const scopesJson = JSON.stringify(tokens.scope ?? []);
+          await tx.twitchToken.upsert({ where: { channelId: channel.id }, create: { channelId: channel.id, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson, expiresAt }, update: { accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson, expiresAt } });
+        } catch (error) { throw { step: 'twitch_token_upsert_failed', cause: error }; }
         return { user, channel };
       });
 
@@ -137,19 +157,19 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       const debugBase = buildCallbackDebug();
       if (error instanceof TwitchApiError && error.context === 'exchange_code') {
         app.log.warn({ requestId, status: error.status }, 'twitch oauth token exchange failed');
-        return sendCallbackError(rep, error.status >= 500 ? 502 : 400, 'twitch.oauth.token_exchange_failed', requestId, 'Token Exchange mit Twitch fehlgeschlagen.', { ...debugBase, twitchStatus: error.status, twitchError: error.safeMessage });
+        return sendCallbackError(rep, error.status >= 500 ? 502 : 400, 'twitch.oauth.token_exchange_failed', requestId, 'OAuth-Code konnte nicht gegen Twitch-Tokens getauscht werden.', { ...debugBase, twitchStatus: error.status, twitchError: error.safeMessage });
       }
       if (error instanceof TwitchApiError && error.context === 'get_current_user') {
         app.log.warn({ requestId, status: error.status }, 'twitch oauth userinfo failed');
         return sendCallbackError(rep, 502, 'twitch.oauth.userinfo_failed', requestId, 'Twitch-Userdaten konnten nicht geladen werden.', { ...debugBase, twitchStatus: error.status, twitchError: error.safeMessage });
       }
-      if (error instanceof Error && /TOKEN_ENCRYPTION_KEY|AES-256|Invalid TOKEN_ENCRYPTION_KEY/.test(error.message)) {
-        app.log.error({ requestId }, 'token encryption key misconfigured');
-        return sendCallbackError(rep, 500, 'twitch.oauth.token_encryption_failed', requestId, 'Token-Verschlüsselung ist nicht korrekt konfiguriert.', debugBase);
+      const failedStep = error?.step as string | undefined;
+      const cause = error?.cause ?? error;
+      if (failedStep && (cause instanceof Prisma.PrismaClientKnownRequestError || cause instanceof Prisma.PrismaClientValidationError || cause instanceof Prisma.PrismaClientUnknownRequestError)) {
+        return sendCallbackError(rep, cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === 'P2002' ? 409 : 500, 'twitch.oauth.persistence_failed', requestId, 'Twitch-Konto konnte nicht gespeichert werden.', { failedStep, prismaCode: (cause as any).code });
       }
-      if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientValidationError || error instanceof Prisma.PrismaClientUnknownRequestError) {
-        app.log.error({ requestId, prismaCode: (error as any).code }, 'twitch oauth persistence failed');
-        return sendCallbackError(rep, 500, 'twitch.oauth.persistence_failed', requestId, 'Persistierung der OAuth-Daten fehlgeschlagen.');
+      if (cause instanceof Prisma.PrismaClientKnownRequestError || cause instanceof Prisma.PrismaClientValidationError || cause instanceof Prisma.PrismaClientUnknownRequestError) {
+        return sendCallbackError(rep, 500, 'twitch.oauth.persistence_failed', requestId, 'Twitch-Konto konnte nicht gespeichert werden.', { failedStep: 'unknown', prismaCode: (cause as any).code });
       }
       app.log.error({ requestId, error }, 'twitch oauth callback failed');
       return sendCallbackError(rep, 500, 'twitch.oauth.callback_failed', requestId, 'Unerwarteter Fehler im OAuth-Callback.', debugBase);
