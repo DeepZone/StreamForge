@@ -60,9 +60,19 @@ export class TwitchApi {
     return data.data[0];
   }
 
-  async sendChatMessage(params: { broadcasterId: string; senderId: string; accessToken: string; message: string }) {
-    const res = await fetch('https://api.twitch.tv/helix/chat/messages', { method: 'POST', headers: this.baseHeaders(params.accessToken), body: JSON.stringify({ broadcaster_id: params.broadcasterId, sender_id: params.senderId, message: params.message }) });
-    return this.parseResponse(res, 'send_chat_message');
+  async sendChatMessage(params: { broadcasterId: string; senderId: string; accessToken: string; message: string; replyParentMessageId?: string }) {
+    const message = String(params.message ?? '').slice(0, 500);
+    const res = await fetch('https://api.twitch.tv/helix/chat/messages', {
+      method: 'POST',
+      headers: this.baseHeaders(params.accessToken),
+      body: JSON.stringify({
+        broadcaster_id: params.broadcasterId,
+        sender_id: params.senderId,
+        message,
+        ...(params.replyParentMessageId ? { reply_parent_message_id: params.replyParentMessageId } : {})
+      })
+    });
+    return this.parseResponse<{ data?: Array<{ message_id?: string; is_sent?: boolean; drop_reason?: { code?: string; message?: string } }> }>(res, 'send_chat_message');
   }
 
   async createEventSubSubscription(params: { type: string; version: string; condition: Record<string, string>; sessionId: string; accessToken: string }) {

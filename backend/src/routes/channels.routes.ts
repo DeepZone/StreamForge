@@ -20,6 +20,10 @@ const moderationScope = 'moderator:manage:banned_users';
 const platformBotModeratorScope = 'channel:manage:moderators';
 const BOT_STATUS_STALE_MS = 10 * 60 * 1000;
 const moderationActionSchema = z.object({ action: z.enum(['timeout','ban','unban']), username: z.string().max(100).optional(), durationSeconds: z.number().int().min(1).max(1209600).optional(), reason: z.string().max(500).optional() }).strict();
+const liveChatSendSchema = z.object({
+  message: z.string().max(500),
+  replyParentMessageId: z.string().max(128).optional()
+}).strict();
 
 const channelsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/channels', { preHandler: requireAuth }, async (req) => {
@@ -81,6 +85,55 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     const keepalive = setInterval(() => send({ type: 'system.keepalive', channelId, createdAt: new Date().toISOString() }), 25000);
     req.raw.on('close', () => { clearInterval(keepalive); eventBus.unsubscribe(channelId, handler); rep.raw.end(); });
   });
+  app.post('/api/channels/:channelId/live/chat/send', { preHandler: requireAuth }, async (req: any, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
+    const body = liveChatSendSchema.safeParse(req.body ?? {});
+    if (!body.success) return rep.code(400).send({ errorCode: 'validation.failed', details: body.error.issues });
+    const { channelId } = req.params as { channelId: string };
+    const message = body.data.message.trim();
+    if (!message) return rep.code(400).send({ errorCode: 'validation.failed', details: [{ message: 'message required' }] });
+
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
+    const token = await prisma.twitchToken.findUnique({ where: { channelId } });
+    if (!token) return rep.code(400).send({ errorCode: 'twitch.live_chat.auth_required' });
+
+    let accessToken = ''; let refreshToken = ''; let scopes: string[] = [];
+    try { accessToken = decryptSecret(token.accessTokenEncrypted); refreshToken = decryptSecret(token.refreshTokenEncrypted); scopes = JSON.parse(token.scopesJson || '[]'); } catch { return rep.code(400).send({ errorCode: 'twitch.live_chat.auth_required' }); }
+    if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) {
+      try {
+        const refreshed = await twitchApi.refreshAccessToken(refreshToken);
+        accessToken = refreshed.access_token;
+        scopes = refreshed.scope ?? scopes;
+        await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } });
+      } catch {
+        return rep.code(400).send({ errorCode: 'twitch.live_chat.auth_required' });
+      }
+    }
+
+    if (!scopes.includes('user:write:chat')) return rep.code(400).send({ errorCode: 'twitch.live_chat.scope_missing', hint: 'Bitte Twitch erneut verbinden, damit StreamForge als Streamer schreiben darf.' });
+
+    try {
+      const response = await twitchApi.sendChatMessage({ broadcasterId: channel.twitchChannelId, senderId: channel.twitchChannelId, accessToken, message, replyParentMessageId: body.data.replyParentMessageId });
+      const result = response?.data?.[0] ?? {};
+      const isSent = result?.is_sent === true;
+      if (!isSent) {
+        await prisma.botEvent.create({ data: { channelId, platform: Platform.twitch, eventType: 'live_chat_manual_message_failed', payloadJson: JSON.stringify({ dropReason: result?.drop_reason ?? null }) } });
+        await prisma.auditLog.create({ data: { channelId, userId: req.session.userId, action: 'live_chat_manual_message_failed', detailsJson: JSON.stringify({ dropReason: result?.drop_reason ?? null }) } });
+        return rep.code(400).send({ errorCode: 'twitch.live_chat.dropped', ok: false, isSent: false, dropReason: result?.drop_reason ?? { code: 'unknown', message: 'Message dropped by Twitch.' } });
+      }
+      await prisma.botEvent.create({ data: { channelId, platform: Platform.twitch, eventType: 'live_chat_manual_message_sent', payloadJson: JSON.stringify({ messageId: result?.message_id ?? null }) } });
+      await prisma.auditLog.create({ data: { channelId, userId: req.session.userId, action: 'live_chat_manual_message_sent', detailsJson: JSON.stringify({ messageId: result?.message_id ?? null }) } });
+      return { ok: true, messageId: result?.message_id ?? null, isSent: true };
+    } catch (e) {
+      await prisma.botEvent.create({ data: { channelId, platform: Platform.twitch, eventType: 'live_chat_manual_message_failed', payloadJson: JSON.stringify({ reason: 'api_failed' }) } });
+      await prisma.auditLog.create({ data: { channelId, userId: req.session.userId, action: 'live_chat_manual_message_failed', detailsJson: JSON.stringify({ reason: 'api_failed' }) } });
+      if (e instanceof TwitchApiError) return rep.code(502).send({ errorCode: 'twitch.live_chat.send_failed', status: e.status, message: e.safeMessage });
+      return rep.code(502).send({ errorCode: 'twitch.live_chat.send_failed' });
+    }
+  });
+
+
 
 
   app.get('/api/channels/:channelId/twitch/chatters', { preHandler: requireAuth }, async (req, rep) => {
