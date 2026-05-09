@@ -17,13 +17,13 @@ export const generateRecap = async (channelId: string, body: { from?: string; to
     messagesByHourMap.set(hour, (messagesByHourMap.get(hour) || 0) + 1);
   }
   const messagesByHour = [...messagesByHourMap.entries()].map(([hour, count]) => ({ hour, count })).sort((a, b) => a.hour.localeCompare(b.hour));
-  const summary = `Im Zeitraum ${range.from.toISOString()} bis ${range.to.toISOString()} wurden ${radar.summary.totalMessages} Nachrichten von ${radar.summary.uniqueChatters} aktiven Chattern erfasst. Häufige Themen: ${topics.slice(0, 3).map((t) => t.topic).join(', ') || 'keine eindeutigen Themen'}.`;
+  const summary = `Im ausgewerteten Zeitraum wurden ${radar.summary.totalMessages} Chatnachrichten von ${radar.summary.uniqueChatters} aktiven Chattern erfasst. Besonders häufig ging es um ${topics.slice(0, 3).map((t) => t.topic).join(', ') || 'keine eindeutigen Themen'}. Es wurden ${radar.summary.questionsDetected} Fragen erkannt. Daraus ergeben sich ${suggestions.filter((s) => !s.alreadyExists).length} sinnvolle Command-Vorschläge.`;
 
   const recap = await prisma.streamRecap.create({ data: {
     channelId,
     streamSessionId: body.streamSessionId,
     summary,
-    highlightsJson: JSON.stringify({ topChatters: radar.topChatters, topTopics: topics, frequentQuestions: faq.slice(0, 5), commandUsage: radar.summary.activeCommands, notableReturningViewers: radar.returningViewers.slice(0, 5) }),
+    highlightsJson: JSON.stringify({ topChatters: radar.topChatters, topTopics: topics, frequentQuestions: faq.slice(0, 5), commandUsage: radar.summary.commandsUsed, notableReturningViewers: radar.returningViewers.slice(0, 5) }),
     frequentQuestionsJson: JSON.stringify(faq),
     suggestedCommandsJson: JSON.stringify(suggestions),
     returningViewersJson: JSON.stringify(radar.returningViewers),

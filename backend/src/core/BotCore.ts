@@ -1,6 +1,7 @@
-import { Role } from '@prisma/client';
+import { Platform, Role } from '@prisma/client';
 import { parseCommand, findCommand, executeCustomCommand, incrementUsage, checkCooldown } from '../services/commandService.js';
 import { prisma } from '../db/prisma.js';
+import { incrementCommunityCommandCount } from '../services/communityService.js';
 import { TenantContext } from './TenantContext.js';
 import { BotMessage, BotResponse } from './types.js';
 
@@ -27,6 +28,7 @@ export class BotCore {
 
     const response = await executeCustomCommand(tenant.channelId, command, message);
     await incrementUsage(command.id);
+    await incrementCommunityCommandCount(tenant.channelId, Platform.twitch, message.userId, message.username);
     return { content: response };
   }
 }
