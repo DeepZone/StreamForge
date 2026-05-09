@@ -115,7 +115,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get('/api/auth/twitch/bot/callback', async (req: any, rep) => {
+  const handlePlatformBotCallback = async (req: any, rep: any) => {
     const query = req.query as { code?: string; state?: string; error?: string; error_description?: string };
     if (query.error) return sendProblem(req, rep, 'twitch.bot_oauth.provider_error', 400, 'Twitch Bot OAuth wurde vom Provider abgelehnt.');
     if (!query.code || !query.state) return sendProblem(req, rep, 'twitch.bot_oauth.invalid_callback', 400, 'OAuth-Callback ist unvollständig.');
@@ -125,7 +125,8 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       return sendProblem(req, rep, 'twitch.bot_oauth.invalid_state', 400, 'OAuth-State ist ungültig oder abgelaufen.');
     }
     try {
-      const tokens = await twitchApi.exchangeCodeForToken(query.code, `${env.publicApiUrl}/auth/twitch/platform-bot/callback`);
+      const redirectUri = `${env.publicApiUrl}/auth/twitch/platform-bot/callback`;
+      const tokens = await twitchApi.exchangeCodeForToken(query.code, redirectUri);
       const twitchUser = await twitchApi.getCurrentUser(tokens.access_token);
       const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
       await prisma.platformTwitchBot.upsert({
@@ -138,7 +139,10 @@ const authRoutes: FastifyPluginAsync = async (app) => {
     } catch (error: any) {
       return sendProblem(req, rep, 'twitch.bot_oauth.callback_failed', 500, 'Bot-Account konnte nicht verbunden werden.');
     }
-  });
+  };
+
+  app.get('/api/auth/twitch/platform-bot/callback', handlePlatformBotCallback);
+  app.get('/api/auth/twitch/bot/callback', handlePlatformBotCallback);
 
   app.post('/api/auth/logout', async (_req, rep) => { clearSession(rep); return { ok: true }; });
   app.get('/api/auth/me', { preHandler: requireAuth }, async (req) => (await buildSessionForUser((req as AuthedRequest).session.id)).responseUser);

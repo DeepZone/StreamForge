@@ -286,8 +286,9 @@ Pflichtwerte für Production:
 - `BACKEND_URL=https://www.streamforge-bot.com`
 - `TWITCH_REDIRECT_URI=https://www.streamforge-bot.com/api/auth/twitch/callback`
 
-Twitch Developer Console Redirect URL muss **exakt** sein:
+Twitch Developer Console Redirect URLs müssen **exakt** sein:
 - `https://www.streamforge-bot.com/api/auth/twitch/callback`
+- `https://www.streamforge-bot.com/api/auth/twitch/platform-bot/callback`
 
 Typisch falsch:
 - `http://192.168.58.158:8000/api/auth/twitch/callback`
