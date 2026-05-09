@@ -1,53 +1,26 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../api/client';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
+import ErrorBox from '../components/ui/ErrorBox';
+import LoadingState from '../components/ui/LoadingState';
+import PageHeader from '../components/ui/PageHeader';
 
-type Command = { id: string; name: string; response: string; enabled: boolean; cooldownSec: number; requiredRole: string; usageCount: number };
-const emptyForm = { name: '', response: '', enabled: true, cooldownSec: 0, requiredRole: 'viewer' };
+type Role = 'viewer' | 'channel_moderator' | 'channel_admin' | 'channel_owner' | 'platform_admin' | 'system_owner';
+type Command = { id: string; name: string; aliasesJson?: string; aliases?: string[]; response: string; enabled: boolean; cooldownSeconds: number; requiredRole: Role; usageCount: number };
+type CommandForm = { name: string; aliases: string; response: string; enabled: boolean; cooldownSeconds: number; requiredRole: Role };
+const roles: Role[] = ['viewer', 'channel_moderator', 'channel_admin', 'channel_owner', 'platform_admin', 'system_owner'];
+const emptyForm: CommandForm = { name: '', aliases: '', response: '', enabled: true, cooldownSeconds: 0, requiredRole: 'viewer' };
+const nameRe = /^[a-z0-9_-]{1,32}$/;
 
-export default function CommandsPage() {
-  const { channelId = '' } = useParams();
-  const [items, setItems] = useState<Command[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const load = async () => {
-    setLoading(true);
-    setError('');
-    try { setItems(await apiGet<Command[]>(`/api/channels/${channelId}/commands`)); }
-    catch (e: any) { setError(e?.data?.error ?? 'Commands konnten nicht geladen werden.'); }
-    finally { setLoading(false); }
-  };
+export default function CommandsPage() { const { channelId = '' } = useParams(); const [items, setItems] = useState<Command[]>([]); const [form, setForm] = useState<CommandForm>(emptyForm); const [editingId, setEditingId] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [formError, setFormError] = useState('');
+  const load = async () => { setLoading(true); setError(''); try { const data = await apiGet<Command[]>(`/api/channels/${channelId}/commands`); setItems(data); } catch (e: any) { setError(e?.data?.detail ?? e?.data?.error ?? 'Commands konnten nicht geladen werden.'); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, [channelId]);
-
-  const save = async (evt: FormEvent) => {
-    evt.preventDefault();
-    try {
-      if (editingId) await apiPatch(`/api/channels/${channelId}/commands/${editingId}`, form);
-      else await apiPost(`/api/channels/${channelId}/commands`, form);
-      setForm(emptyForm); setEditingId(null); await load();
-    } catch (e: any) { setError(e?.data?.error ?? 'Speichern fehlgeschlagen.'); }
-  };
-  const edit = (item: Command) => { setEditingId(item.id); setForm({ name: item.name, response: item.response, enabled: item.enabled, cooldownSec: item.cooldownSec, requiredRole: item.requiredRole }); };
-  const remove = async (id: string) => { if (!window.confirm('Command wirklich löschen?')) return; await apiDelete(`/api/channels/${channelId}/commands/${id}`); await load(); };
-
-  return <div className='space-y-4'>
-    <h1 className='text-xl font-bold'>Commands</h1>
-    {loading ? <p>Lade…</p> : null}
-    {error ? <p className='rounded border border-red-700 bg-red-950 p-2 text-red-300'>{error}</p> : null}
-    <form onSubmit={save} className='grid md:grid-cols-5 gap-2 rounded border border-slate-700 p-3'>
-      <input className='bg-slate-900 border border-slate-600 px-2 py-1' placeholder='Name' value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-      <input className='bg-slate-900 border border-slate-600 px-2 py-1 md:col-span-2' placeholder='Response' value={form.response} onChange={(e) => setForm({ ...form, response: e.target.value })} required />
-      <input className='bg-slate-900 border border-slate-600 px-2 py-1' type='number' placeholder='Cooldown' value={form.cooldownSec} onChange={(e) => setForm({ ...form, cooldownSec: Number(e.target.value) })} />
-      <input className='bg-slate-900 border border-slate-600 px-2 py-1' placeholder='Required Role' value={form.requiredRole} onChange={(e) => setForm({ ...form, requiredRole: e.target.value })} />
-      <label className='text-sm flex items-center gap-2'><input type='checkbox' checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} /> Enabled</label>
-      <button className='rounded bg-emerald-700 px-3 py-1'>{editingId ? 'Update' : 'Create'}</button>
-    </form>
-    <table className='w-full text-sm'>
-      <thead><tr><th>Name</th><th>Response</th><th>Enabled</th><th>Cooldown</th><th>Required Role</th><th>UsageCount</th><th /></tr></thead>
-      <tbody>{items.map((item) => <tr key={item.id} className='border-t border-slate-800'><td>!{item.name}</td><td>{item.response}</td><td>{String(item.enabled)}</td><td>{item.cooldownSec}</td><td>{item.requiredRole}</td><td>{item.usageCount}</td><td className='space-x-2'><button className='underline' onClick={() => edit(item)}>Edit</button><button className='underline text-red-300' onClick={() => void remove(item.id)}>Delete</button></td></tr>)}</tbody>
-    </table>
-  </div>;
-}
+  const validation = useMemo(() => { if (!nameRe.test(form.name)) return 'Name muss 1-32 Zeichen haben und nur a-z, 0-9, _ oder - enthalten.'; if (!form.response.trim()) return 'Response ist erforderlich.'; if (form.response.length > 500) return 'Response darf maximal 500 Zeichen haben.'; if (form.cooldownSeconds < 0 || !Number.isInteger(form.cooldownSeconds)) return 'Cooldown muss eine Ganzzahl >= 0 sein.'; return ''; }, [form]);
+  const parseAliases = (text: string) => Array.from(new Set(text.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)));
+  const save = async (evt: FormEvent) => { evt.preventDefault(); setFormError(''); if (validation) { setFormError(validation); return; } setSaving(true); try { const payload = { name: form.name.toLowerCase(), aliases: parseAliases(form.aliases), response: form.response, enabled: form.enabled, cooldownSeconds: form.cooldownSeconds, requiredRole: form.requiredRole }; if (editingId) await apiPatch(`/api/channels/${channelId}/commands/${editingId}`, payload); else await apiPost(`/api/channels/${channelId}/commands`, payload); setForm(emptyForm); setEditingId(null); await load(); } catch (e: any) { setFormError(e?.data?.detail ?? e?.data?.error ?? 'Speichern fehlgeschlagen.'); } finally { setSaving(false); } };
+  const remove = async (id: string) => { if (!window.confirm('Command wirklich löschen?')) return; try { await apiDelete(`/api/channels/${channelId}/commands/${id}`); await load(); } catch (e: any) { setError(e?.data?.detail ?? e?.data?.error ?? 'Löschen fehlgeschlagen.'); } };
+  const edit = (item: Command) => { const aliases = item.aliases ?? JSON.parse(item.aliasesJson || '[]'); setEditingId(item.id); setForm({ name: item.name, aliases: aliases.join(', '), response: item.response, enabled: item.enabled, cooldownSeconds: item.cooldownSeconds, requiredRole: item.requiredRole }); };
+  return <div className='space-y-4'><PageHeader title='Commands' subtitle='Custom Commands sicher verwalten und live anpassen.' />{error && <ErrorBox message={error} />}<Card className='p-4'><form onSubmit={save} className='grid md:grid-cols-2 gap-3'><input className='bg-zinc-900 border border-zinc-700 rounded px-2 py-2' placeholder='name (ohne !)' value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase() })} /><input className='bg-zinc-900 border border-zinc-700 rounded px-2 py-2' placeholder='aliases, comma-separated' value={form.aliases} onChange={(e) => setForm({ ...form, aliases: e.target.value })} /><textarea className='bg-zinc-900 border border-zinc-700 rounded px-2 py-2 md:col-span-2 min-h-20' placeholder='Response' value={form.response} onChange={(e) => setForm({ ...form, response: e.target.value })} /><input className='bg-zinc-900 border border-zinc-700 rounded px-2 py-2' type='number' min={0} placeholder='Cooldown Sekunden' value={form.cooldownSeconds} onChange={(e) => setForm({ ...form, cooldownSeconds: Number(e.target.value) })} /><select className='bg-zinc-900 border border-zinc-700 rounded px-2 py-2' value={form.requiredRole} onChange={(e) => setForm({ ...form, requiredRole: e.target.value as Role })}>{roles.map((r) => <option key={r} value={r}>{r}</option>)}</select><label className='text-sm flex items-center gap-2'><input type='checkbox' checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} /> Enabled</label><div className='md:col-span-2 flex gap-2'>{editingId && <Button type='button' variant='ghost' onClick={() => { setEditingId(null); setForm(emptyForm); }}>Abbrechen</Button>}<Button disabled={saving}>{editingId ? 'Speichern' : 'Command erstellen'}</Button></div>{(formError || validation) && <div className='md:col-span-2'><ErrorBox message={formError || validation} /></div>}</form></Card>{loading ? <LoadingState label='Commands werden geladen…' /> : items.length === 0 ? <EmptyState title='Noch keine Commands' description='Lege den ersten Custom Command für deinen Channel an.' /> : <Card className='p-0 overflow-x-auto'><table className='w-full text-sm'><thead><tr className='border-b border-zinc-800'><th className='p-2 text-left'>Name</th><th className='p-2 text-left'>Aliases</th><th className='p-2 text-left'>Response</th><th className='p-2'>Enabled</th><th className='p-2'>Cooldown</th><th className='p-2'>Role</th><th className='p-2'>Usage</th><th className='p-2'>Aktion</th></tr></thead><tbody>{items.map((item) => { const aliases = item.aliases ?? JSON.parse(item.aliasesJson || '[]'); return <tr key={item.id} className='border-t border-zinc-800'><td className='p-2'>!{item.name}</td><td className='p-2'>{aliases.join(', ') || '-'}</td><td className='p-2 max-w-xl truncate'>{item.response}</td><td className='p-2 text-center'><input type='checkbox' checked={item.enabled} onChange={async (e) => { await apiPatch(`/api/channels/${channelId}/commands/${item.id}`, { enabled: e.target.checked }); await load(); }} /></td><td className='p-2 text-center'>{item.cooldownSeconds}s</td><td className='p-2 text-center'>{item.requiredRole}</td><td className='p-2 text-center'>{item.usageCount}</td><td className='p-2 space-x-2'><Button variant='ghost' onClick={() => edit(item)}>Bearbeiten</Button><Button variant='danger' onClick={() => void remove(item.id)}>Löschen</Button></td></tr>; })}</tbody></table></Card>}</div>; }

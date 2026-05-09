@@ -324,3 +324,28 @@ Scopes (MVP):
 - `channel:bot`
 
 Bei Scope-Änderungen muss OAuth erneut durchgeführt werden.
+
+
+## Aktueller MVP Stand
+
+Funktioniert:
+- Login
+- Twitch OAuth
+- EventSub
+- Commands
+- Custom Commands
+
+Nutzbar im Dashboard:
+- Commands
+- Timer (Verwaltung im Dashboard; Ausführung aktuell MVP/experimentell solange Timer-Worker nicht produktiv angeschlossen ist)
+- Logs
+- Admin Health
+
+Testablauf:
+1. Twitch Login
+2. EventSub aktivieren
+3. !ping testen
+4. Custom Command im Dashboard anlegen
+5. Im Twitch Chat testen
+6. Usage Count prüfen
+7. Logs prüfen
