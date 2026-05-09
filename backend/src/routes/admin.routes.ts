@@ -7,6 +7,10 @@ import { twitchConnectionManager } from '../twitch/managerSingleton.js';
 import { audit } from '../services/auditService.js';
 import { getTimerWorkerHealth } from '../workers/timerWorker.js';
 
+import crypto from 'crypto';
+import { setTwitchBotOAuthState } from '../auth/session.js';
+
+
 const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/health', { preHandler: requireAuth }, async (req, rep) => {
     if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
@@ -45,6 +49,21 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       scopes: { broadcaster: [...TWITCH_BROADCASTER_SCOPES], botAccount: [...TWITCH_BOT_ACCOUNT_SCOPES] }
     };
   });
+
+  app.get('/api/admin/twitch/platform-bot/start', { preHandler: requireAuth }, async (req, rep) => {
+    const authed = req as AuthedRequest;
+    if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
+    const state = crypto.randomBytes(32).toString('hex');
+    setTwitchBotOAuthState(rep, state);
+    const url = new URL('https://id.twitch.tv/oauth2/authorize');
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', env.twitchClientId);
+    url.searchParams.set('redirect_uri', `${env.publicApiUrl}/auth/twitch/platform-bot/callback`);
+    url.searchParams.set('scope', TWITCH_BOT_ACCOUNT_SCOPES.join(' '));
+    url.searchParams.set('state', state);
+    return rep.code(302).redirect(url.toString());
+  });
+
   app.post('/api/admin/twitch/sessions/start-all', { preHandler: requireAuth }, async (req, rep) => {
     const authed = req as AuthedRequest;
     if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
