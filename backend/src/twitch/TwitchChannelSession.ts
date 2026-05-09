@@ -128,11 +128,15 @@ export class TwitchChannelSession {
       const evt = payload?.event;
     if (!evt || evt.broadcaster_user_id !== this.channelTwitchId) return;
       this.lastMessageAt = new Date().toISOString();
+      await this.logEvent('eventsub_notification_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
       await this.logEvent('eventsub_chat_message_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
       const saved = await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
       await this.logEvent('chat_message_saved', { storedMessageId: saved.id, messageId: evt.message_id ?? null });
       await this.logEvent('community_user_updated', { userId: evt.chatter_user_id });
-      const isCommand = String(evt.message?.text ?? '').trimStart().startsWith('!');
+      const settings = await prisma.channelSettings.findUnique({ where: { channelId: this.channelId } });
+      const prefix = settings?.commandPrefix ?? '!';
+      const messageText = String(evt.message?.text ?? '');
+      const isCommand = messageText.trimStart().startsWith(prefix);
       eventBus.publish(this.channelId, {
       type: isCommand ? 'chat.command' : 'chat.message',
       channelId: this.channelId,
@@ -144,6 +148,7 @@ export class TwitchChannelSession {
       createdAt: saved.createdAt.toISOString()
     });
       await this.logEvent('live_chat_event_published', { storedMessageId: saved.id, type: isCommand ? 'chat.command' : 'chat.message' });
+      if (isCommand) await this.logEvent('command_detected', { messageId: evt.message_id ?? null, prefix });
       const response = await this.botCore.handleMessage({ platform: 'twitch', channelId: this.channelId, externalMessageId: evt.message_id, userId: evt.chatter_user_id, username: evt.chatter_user_login, content: evt.message?.text ?? '', isMod: evt.chatter_is_moderator, isBroadcaster: evt.chatter_is_broadcaster }, new TenantContext(this.channelId, 'twitch'));
       if (response?.content) {
       try {

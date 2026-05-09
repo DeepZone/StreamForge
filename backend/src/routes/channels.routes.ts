@@ -354,13 +354,23 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
       prisma.twitchToken.findUnique({ where: { channelId } })
     ]);
     if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
-    const session = (await import('../twitch/managerSingleton.js')).twitchConnectionManager.health().sessions.find((s: any) => s.channelId === channelId);
+    const managerHealth = (await import('../twitch/managerSingleton.js')).twitchConnectionManager.health();
+    const session = managerHealth.sessions.find((s: any) => s.channelId === channelId);
     const lastStored = await prisma.chatMessage.findFirst({ where: { channelId }, orderBy: { createdAt: 'desc' } });
     const dayCount = await prisma.chatMessage.count({ where: { channelId, createdAt: { gte: new Date(Date.now() - 24*60*60*1000) } } });
     const eventStats = eventBus.getChannelStats(channelId);
     const scopes = token ? JSON.parse(token.scopesJson || '[]') : [];
-    return { channel: { id: channel.id, twitchLogin: channel.twitchLogin, twitchChannelId: channel.twitchChannelId }, platformBot: { connected: Boolean(bot), botLogin: bot?.twitchLogin ?? null, moderatorStatus: botStatus?.status ?? 'unknown', lastCheckedAt: botStatus?.lastCheckedAt ?? null, canSendAsPlatformBot: Boolean(botStatus?.isModerator) }, eventSub: { enabled: true, status: session?.status ?? 'missing', connected: Boolean(session?.connected), subscribed: Boolean(session?.subscribed), subscriptionsCount: session?.subscriptionsCount ?? 0, lastMessageAt: session?.lastMessageAt ?? null, lastError: session?.lastError ?? null, reconnectCount: session?.reconnectCount ?? 0 }, chat: { lastStoredMessageAt: lastStored?.createdAt ?? null, storedMessagesLast24h: dayCount }, liveStream: eventStats, tokens: { hasBroadcasterToken: Boolean(token), broadcasterScopes: scopes, hasPlatformBotToken: Boolean(bot?.accessTokenEncrypted), platformBotScopes: bot ? JSON.parse(bot.scopesJson || '[]') : [] } };
+    return {
+      channel: { id: channel.id, twitchLogin: channel.twitchLogin, twitchChannelId: channel.twitchChannelId, isActive: channel.isActive, botEnabled: channel.botEnabled },
+      eventSub: { enabled: managerHealth.eventSubEnabled, connected: managerHealth.eventSubConnected, sessionIdPresent: managerHealth.eventSubSessionIdPresent, lastWelcomeAt: managerHealth.eventSubLastWelcomeAt, lastReconnectAt: managerHealth.eventSubLastReconnectAt, lastError: managerHealth.eventSubLastError },
+      session: { exists: Boolean(session), status: session?.status ?? 'missing', connected: Boolean(session?.connected), subscribed: Boolean(session?.subscribed), subscriptionsCount: session?.subscriptionsCount ?? 0, lastConnectedAt: session?.lastConnectedAt ?? null, lastSubscriptionAt: session?.lastSubscriptionAt ?? null, lastMessageAt: session?.lastMessageAt ?? null, lastError: session?.lastError ?? null },
+      chat: { lastStoredMessageAt: lastStored?.createdAt ?? null, storedMessagesLast24h: dayCount },
+      liveStream: eventStats,
+      tokens: { hasBroadcasterToken: Boolean(token), broadcasterScopes: scopes, hasPlatformBotToken: Boolean(bot?.accessTokenEncrypted), platformBotScopes: bot ? JSON.parse(bot.scopesJson || '[]') : [] },
+      platformBot: { connected: Boolean(bot), moderatorStatus: botStatus?.status ?? 'unknown', canSendAsPlatformBot: Boolean(botStatus?.isModerator) }
+    };
   });
+
 
 };
 export default channelsRoutes;

@@ -82,6 +82,15 @@ app.get('/api/admin/twitch/platform-bot/start', { preHandler: requireAuth }, asy
     return rep.code(302).redirect(url.toString());
   });
 
+
+  app.post('/api/admin/twitch/eventsub/restart', { preHandler: requireAuth }, async (req, rep) => {
+    const authed = req as AuthedRequest;
+    if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
+    if (!ensureEnabled(rep)) return;
+    const result = await twitchConnectionManager.restartEventSub();
+    await audit('admin_twitch_restart_eventsub', authed.session.id);
+    return result;
+  });
   app.post('/api/admin/twitch/sessions/start-all', { preHandler: requireAuth }, async (req, rep) => {
     const authed = req as AuthedRequest;
     if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
