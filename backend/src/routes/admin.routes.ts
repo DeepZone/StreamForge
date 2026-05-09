@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { Role } from '@prisma/client';
 import { isAdmin, requireAuth, AuthedRequest } from '../auth/guards.js';
-import { env } from '../config/env.js';
+import { env, getMissingTwitchOAuthEnvVars, isTokenEncryptionKeyValid } from '../config/env.js';
 import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
 import { twitchConnectionManager } from '../twitch/managerSingleton.js';
 import { audit } from '../services/auditService.js';
@@ -23,12 +23,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/api/admin/twitch/config', { preHandler: requireAuth }, async (req, rep) => {
     if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
-    const missingEnvVars = [
-      ['TWITCH_CLIENT_ID', env.twitchClientId],
-      ['TWITCH_CLIENT_SECRET', env.twitchClientSecret],
-      ['TWITCH_REDIRECT_URI', env.twitchRedirectUri],
-      ['TOKEN_ENCRYPTION_KEY', env.tokenKey]
-    ].filter(([, value]) => !value).map(([key]) => key);
+    const missingEnvVars = [...getMissingTwitchOAuthEnvVars(), ...(!env.tokenKey ? ['TOKEN_ENCRYPTION_KEY'] : [])];
     return {
       oauthConfigured: missingEnvVars.length === 0,
       missingEnvVars,
@@ -39,7 +34,13 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       hasClientId: Boolean(env.twitchClientId),
       hasClientSecret: Boolean(env.twitchClientSecret),
       hasTokenEncryptionKey: Boolean(env.tokenKey),
-      tokenEncryptionKeyValid: /^[0-9a-fA-F]{64}$/u.test(env.tokenKey),
+      tokenEncryptionKeyValid: isTokenEncryptionKeyValid(),
+      effectiveFrontendUrl: env.frontendUrl,
+      effectiveBackendUrl: env.backendUrl,
+      cookieSecure: env.nodeEnv === 'production' || env.cookieSecure,
+      cookieSameSite: env.cookieSameSite,
+      nodeEnv: env.nodeEnv,
+      trustProxy: env.trustProxy,
       scopes: [...TWITCH_MVP_SCOPES]
     };
   });

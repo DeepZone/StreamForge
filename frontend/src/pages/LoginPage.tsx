@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { useNavigate } from 'react-router-dom';
-import { apiBase, apiPost } from '../api/client';
+import { apiBase, apiGet, apiPost } from '../api/client';
 
 export default function LoginPage() {
   const { refresh } = useAuth();
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [twitchConfigDebug, setTwitchConfigDebug] = useState('');
 
   const loginLocal = async (evt: FormEvent) => {
     evt.preventDefault();
@@ -24,37 +25,22 @@ export default function LoginPage() {
       }
       navigate('/channels', { replace: true });
     } catch (err: any) {
-      if (err?.status === 401) {
-        setError('E-Mail oder Passwort ist falsch.');
-      } else if (err?.status === 400) {
-        setError(err?.data?.error ?? 'Bitte alle Pflichtfelder korrekt ausfüllen.');
-      } else {
-        setError(`Login ist aktuell nicht erreichbar. API-Basis: ${apiBase || 'same-origin /api'}. Bitte Backend-Status und VITE_API_URL prüfen.`);
-      }
-    } finally {
-      setLoading(false);
-    }
+      setError(err?.status === 401 ? 'E-Mail oder Passwort ist falsch.' : 'Login ist aktuell nicht erreichbar.');
+    } finally { setLoading(false); }
   };
 
-  const startTwitchLogin = async () => {
+  const startTwitchLogin = () => {
+    const oauthStartUrl = apiBase ? `${apiBase}/api/auth/twitch/start` : '/api/auth/twitch/start';
+    window.location.href = oauthStartUrl;
+  };
+
+  const checkTwitchConfig = async () => {
     try {
-      const res = await fetch(`${apiBase}/api/auth/twitch/start`, { credentials: 'include', redirect: 'manual' });
-      if (res.status >= 300 && res.status < 400) {
-        const location = res.headers.get('location');
-        if (location) window.location.href = location;
-        return;
-      }
-      if (!res.ok) {
-        const data = await res.json().catch(() => null) as { missingEnvVars?: string[] } | null;
-        const missing = data?.missingEnvVars ?? [];
-        if (missing.length > 0) {
-          setError(`Twitch OAuth fehlt im Backend: ${missing.join(', ')}.`);
-          return;
-        }
-        setError('Twitch OAuth ist im Backend nicht korrekt konfiguriert.');
-      }
+      const cfg = await apiGet<Record<string, unknown>>('/api/public/twitch/config');
+      setTwitchConfigDebug(JSON.stringify(cfg, null, 2));
+      setError('');
     } catch {
-      setError('Twitch OAuth ist aktuell nicht erreichbar.');
+      setError('Twitch-Konfiguration konnte nicht geladen werden.');
     }
   };
 
@@ -63,23 +49,17 @@ export default function LoginPage() {
       <h1 className='text-2xl font-semibold'>Login</h1>
       <form className='space-y-3 rounded border border-slate-700 bg-slate-900 p-4' onSubmit={loginLocal}>
         <h2 className='text-lg font-medium'>Lokaler Admin-Login</h2>
-        <label className='block space-y-1'>
-          <span className='text-sm text-slate-300'>E-Mail</span>
-          <input type='email' className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100' value={email} onChange={(e) => setEmail(e.target.value)} autoComplete='username' required />
-        </label>
-        <label className='block space-y-1'>
-          <span className='text-sm text-slate-300'>Passwort</span>
-          <input type='password' className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100' value={password} onChange={(e) => setPassword(e.target.value)} autoComplete='current-password' required />
-        </label>
-        <button type='submit' disabled={loading} className='rounded bg-emerald-600 px-4 py-2 text-white disabled:opacity-70'>
-          {loading ? 'Einloggen…' : 'Einloggen'}
-        </button>
+        <label className='block space-y-1'><span className='text-sm text-slate-300'>E-Mail</span><input type='email' className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100' value={email} onChange={(e) => setEmail(e.target.value)} autoComplete='username' required /></label>
+        <label className='block space-y-1'><span className='text-sm text-slate-300'>Passwort</span><input type='password' className='w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100' value={password} onChange={(e) => setPassword(e.target.value)} autoComplete='current-password' required /></label>
+        <button type='submit' disabled={loading} className='rounded bg-emerald-600 px-4 py-2 text-white disabled:opacity-70'>{loading ? 'Einloggen…' : 'Einloggen'}</button>
       </form>
       <div className='space-y-2'>
         <p>Alternativ:</p>
         <button className='rounded bg-purple-600 px-4 py-2 text-white' onClick={startTwitchLogin}>Mit Twitch anmelden</button>
+        <button className='rounded bg-slate-700 px-4 py-2 text-white ml-2' onClick={checkTwitchConfig}>Twitch-Konfiguration prüfen</button>
       </div>
       {error ? <p className='rounded border border-red-700 bg-red-950 p-3 text-red-300'>{error}</p> : null}
+      {twitchConfigDebug ? <pre className='rounded border border-slate-700 bg-slate-950 p-3 text-xs overflow-auto'>{twitchConfigDebug}</pre> : null}
     </div>
   );
 }

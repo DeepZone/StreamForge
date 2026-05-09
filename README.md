@@ -276,3 +276,51 @@ curl -i https://www.streamforge-bot.com/api/auth/twitch/start
 
 Für OAuth-Tests `TWITCH_EVENTSUB_ENABLED=false` setzen.
 Erst nach erfolgreichem OAuth-Login und gespeicherten Tokens auf `true` setzen und Backend neu starten.
+
+## Twitch OAuth Production (Reverse Proxy)
+
+Pflichtwerte für Production:
+- `PUBLIC_APP_URL=https://www.streamforge-bot.com`
+- `PUBLIC_API_URL=https://www.streamforge-bot.com/api`
+- `FRONTEND_URL=https://www.streamforge-bot.com`
+- `BACKEND_URL=https://www.streamforge-bot.com`
+- `TWITCH_REDIRECT_URI=https://www.streamforge-bot.com/api/auth/twitch/callback`
+
+Twitch Developer Console Redirect URL muss **exakt** sein:
+- `https://www.streamforge-bot.com/api/auth/twitch/callback`
+
+Typisch falsch:
+- `http://192.168.58.158:8000/api/auth/twitch/callback`
+- `http://192.168.58.158:4173/login`
+- `https://streamforge-bot.com/api/auth/twitch/callback`
+- `https://www.streamforge-bot.com/auth/twitch/callback`
+- `https://www.streamforge-bot.com/api/auth/twitch/callback/`
+
+Nginx/NPM Proxy:
+- `/api` -> `http://192.168.58.158:8000`
+- `/` -> `http://192.168.58.158:4173`
+- Forwarded Header: `Host`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Real-IP`
+
+Diagnose:
+```bash
+curl -i https://www.streamforge-bot.com/api/public/health
+curl -i https://www.streamforge-bot.com/api/public/twitch/config
+curl -i https://www.streamforge-bot.com/api/public/twitch/oauth-url
+curl -I https://www.streamforge-bot.com/api/auth/twitch/start
+```
+
+Erwartung:
+- `/api/public/health` -> `200` JSON
+- `/api/public/twitch/config` -> sichere Config-Diagnose
+- `/api/public/twitch/oauth-url` -> OAuth URL mit korrekter `redirect_uri`
+- `/api/auth/twitch/start` -> `302` zu `https://id.twitch.tv/oauth2/authorize...`
+- niemals Redirect zu `http://192.168.58.158:4173/login`
+
+Scopes (MVP):
+- `user:read:email`
+- `user:read:chat`
+- `user:write:chat`
+- `user:bot`
+- `channel:bot`
+
+Bei Scope-Änderungen muss OAuth erneut durchgeführt werden.

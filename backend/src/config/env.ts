@@ -9,12 +9,12 @@ const schema = z.object({
   DATABASE_URL: z.string().default(''),
   SESSION_SECRET: z.string().min(32),
   TOKEN_ENCRYPTION_KEY: z.string().default(''),
-  FRONTEND_URL: z.string().url().default('http://192.168.58.158:4173'),
-  BACKEND_URL: z.string().url().default('http://192.168.58.158:8000'),
-  PUBLIC_APP_URL: z.string().url().default('https://www.streamforge-bot.com'),
-  PUBLIC_API_URL: z.string().url().default('https://www.streamforge-bot.com/api'),
+  FRONTEND_URL: z.string().url().default('http://localhost:4173'),
+  BACKEND_URL: z.string().url().default('http://localhost:8000'),
+  PUBLIC_APP_URL: z.string().url().default('http://localhost:4173'),
+  PUBLIC_API_URL: z.string().url().default('http://localhost:8000/api'),
   TRUST_PROXY: z.coerce.boolean().default(true),
-  ALLOWED_ORIGINS: z.string().default('https://www.streamforge-bot.com'),
+  ALLOWED_ORIGINS: z.string().default('http://localhost:4173'),
   COOKIE_SECURE: z.coerce.boolean().default(true),
   COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).default('lax'),
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
@@ -27,6 +27,7 @@ const schema = z.object({
 
 const parsed = schema.parse(process.env);
 const tokenKeySchema = z.string().regex(/^[0-9a-fA-F]{64}$/u, 'TOKEN_ENCRYPTION_KEY must be a 64-char hex string for AES-256');
+const normalizedPublicApiUrl = parsed.PUBLIC_API_URL.replace(/\/$/u, '');
 
 export const env = {
   nodeEnv: parsed.NODE_ENV,
@@ -36,7 +37,7 @@ export const env = {
   frontendUrl: parsed.FRONTEND_URL,
   backendUrl: parsed.BACKEND_URL,
   publicAppUrl: parsed.PUBLIC_APP_URL,
-  publicApiUrl: parsed.PUBLIC_API_URL,
+  publicApiUrl: normalizedPublicApiUrl,
   trustProxy: parsed.TRUST_PROXY,
   allowedOrigins: parsed.ALLOWED_ORIGINS.split(',').map((x) => x.trim()).filter(Boolean),
   cookieSecure: parsed.COOKIE_SECURE,
@@ -44,7 +45,7 @@ export const env = {
   rateLimitEnabled: parsed.RATE_LIMIT_ENABLED,
   twitchClientId: parsed.TWITCH_CLIENT_ID,
   twitchClientSecret: parsed.TWITCH_CLIENT_SECRET,
-  twitchRedirectUri: parsed.TWITCH_REDIRECT_URI || `${parsed.BACKEND_URL.replace(/\/$/u, '')}/api/auth/twitch/callback`,
+  twitchRedirectUri: parsed.TWITCH_REDIRECT_URI || `${normalizedPublicApiUrl}/auth/twitch/callback`,
   tokenKey: parsed.TOKEN_ENCRYPTION_KEY,
   twitchEventSubEnabled: parsed.TWITCH_EVENTSUB_ENABLED,
   twitchEventSubDebug: parsed.TWITCH_EVENTSUB_DEBUG
@@ -55,6 +56,7 @@ export const assertTwitchOAuthConfig = () => { if (!hasTwitchOAuthConfig()) thro
 export const getMissingTwitchOAuthEnvVars = () => [
   ['TWITCH_CLIENT_ID', env.twitchClientId],
   ['TWITCH_CLIENT_SECRET', env.twitchClientSecret],
-  ['TWITCH_REDIRECT_URI', parsed.TWITCH_REDIRECT_URI]
+  ['TWITCH_REDIRECT_URI', parsed.TWITCH_REDIRECT_URI || env.publicApiUrl]
 ].filter(([, value]) => !value).map(([key]) => key);
+export const isTokenEncryptionKeyValid = () => tokenKeySchema.safeParse(env.tokenKey).success;
 export const assertTokenEncryptionKey = () => { const result = tokenKeySchema.safeParse(env.tokenKey); if (!result.success) throw new Error(result.error.issues[0]?.message || 'Invalid TOKEN_ENCRYPTION_KEY'); };
