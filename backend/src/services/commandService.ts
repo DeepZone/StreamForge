@@ -2,6 +2,7 @@ import { Command } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { BotMessage } from '../core/types.js';
 import { detectFaq, resolveRange } from './analyticsService.js';
+import { audit } from './auditService.js';
 
 const cooldownMemory = new Map<string, number>();
 
@@ -36,4 +37,15 @@ export const getCommandSuggestions = async (channelId: string, query: { from?: s
   const names = new Set(commands.map((c) => c.name));
   const aliases = new Set(commands.flatMap((c) => JSON.parse(c.aliasesJson || '[]')));
   return faq.map((f) => ({ sourceQuestion: f.question, count: f.count, suggestedName: f.suggestedCommandName, suggestedResponse: f.suggestedResponseDraft, alreadyExists: names.has(f.suggestedCommandName) || aliases.has(f.suggestedCommandName) }));
+};
+
+
+export const createCommandFromSuggestion = async (channelId: string, userId: string | undefined, body: { name: string; response: string; aliases?: string[]; sourceQuestion?: string }) => {
+  const aliases = Array.from(new Set((body.aliases || []).map((a) => a.trim().toLowerCase()).filter(Boolean)));
+  const existing = await prisma.command.findMany({ where: { channelId } });
+  const aliasSet = new Set(existing.flatMap((c) => JSON.parse(c.aliasesJson || '[]')));
+  if (existing.some((c) => c.name === body.name) || aliasSet.has(body.name)) throw new Error('conflict');
+  const created = await prisma.command.create({ data: { channelId, name: body.name, response: body.response, aliasesJson: JSON.stringify(aliases), enabled: true, cooldownSeconds: 0, requiredRole: 'viewer', conditionsJson: '{}' } });
+  await audit('command.create_from_suggestion', userId, channelId, { commandId: created.id, name: body.name, sourceQuestion: body.sourceQuestion || null });
+  return created;
 };

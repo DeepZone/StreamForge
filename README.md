@@ -349,3 +349,26 @@ Testablauf:
 5. Im Twitch Chat testen
 6. Usage Count prüfen
 7. Logs prüfen
+
+## Community Intelligence MVP
+
+StreamForge enthält nun ein kanalgebundenes Community-Intelligence-MVP auf Basis lokal gespeicherter Twitch-Chatdaten:
+- Community Radar mit Nachrichten, aktiven Chattern, neuen/wiederkehrenden Zuschauern, Topics, FAQ-Anteilen, Command-Nutzung und heuristischem Engagement-Score.
+- FAQ-Erkennung mit Normalisierung und Gruppierung ähnlicher Fragen.
+- Command-Vorschläge inkl. Erstellung eines Commands direkt aus dem Vorschlag.
+- Stream Recaps als lokal erzeugte Zusammenfassung ohne externe KI.
+
+Wichtig:
+- Alle Auswertungen sind heuristisch und lokal.
+- Keine externe KI/API.
+- Keine automatische Moderation oder Sanktionen.
+- Keine personenbezogene Diagnose.
+
+### Testablauf
+1. Im Twitch Chat mehrere Nachrichten schreiben.
+2. Fragen stellen, z. B. „Welches Mikro nutzt du?“.
+3. Dashboard → Community Radar öffnen.
+4. Command-Vorschlag prüfen.
+5. Command daraus erstellen.
+6. Im Twitch Chat testen.
+7. Recap generieren.
