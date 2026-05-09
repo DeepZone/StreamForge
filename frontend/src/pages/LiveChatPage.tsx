@@ -8,6 +8,33 @@ import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 
 const dedupKey = (m: any) => m?.externalMessageId || m?.messageId || m?.id || `${m?.username || ''}|${m?.message || ''}|${m?.createdAt || ''}`;
+const viewerNameColors = [
+  '#f87171',
+  '#fb923c',
+  '#facc15',
+  '#4ade80',
+  '#34d399',
+  '#22d3ee',
+  '#60a5fa',
+  '#818cf8',
+  '#a78bfa',
+  '#f472b6',
+  '#fb7185'
+];
+const isValidHexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
+const getStableColor = (input: string): string => {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = input.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return viewerNameColors[Math.abs(hash) % viewerNameColors.length];
+};
+const getViewerNameColor = (message: any): string => {
+  if (isValidHexColor(message?.color)) return message.color;
+  if (isValidHexColor(message?.userColor)) return message.userColor;
+  if (isValidHexColor(message?.chatterColor)) return message.chatterColor;
+  return getStableColor(message?.twitchUserId || message?.username || message?.displayName || 'unknown');
+};
 const dedupMessages = (messages: any[]) => {
   const seen = new Set<string>();
   const out: any[] = [];
@@ -112,7 +139,16 @@ export default function LiveChatPage() {
       {sendError && <ErrorBox message={sendError} />}
     </div>
     <div ref={boxRef} className='h-[65vh] overflow-auto rounded border border-zinc-800 bg-zinc-950 p-3 space-y-2'>
-      {!filtered.length ? <EmptyState title='Keine Nachrichten' description='Noch keine Chatnachrichten sichtbar.' /> : filtered.map((m, i) => <div key={`${dedupKey(m)}-${i}`} className='text-sm'><span className='text-zinc-500 mr-2'>{new Date(m.createdAt).toLocaleTimeString()}</span><span className='text-slate-100'>{m.username}</span><span className='mx-2 text-zinc-500'>:</span><span className='text-slate-100'>{m.message}</span></div>)}
+      {!filtered.length ? <EmptyState title='Keine Nachrichten' description='Noch keine Chatnachrichten sichtbar.' /> : filtered.map((m, i) => {
+        const nameColor = getViewerNameColor(m);
+        const displayName = m.displayName || m.username || 'unknown';
+        return <div key={`${dedupKey(m)}-${i}`} className='text-sm'>
+          <span className='text-zinc-500 mr-2'>{new Date(m.createdAt).toLocaleTimeString()}</span>
+          <span style={{ color: nameColor }}>{displayName}</span>
+          <span className='mx-2 text-zinc-500'>:</span>
+          <span className='text-slate-100'>{m.message}</span>
+        </div>;
+      })}
     </div>
   </div>;
 }
