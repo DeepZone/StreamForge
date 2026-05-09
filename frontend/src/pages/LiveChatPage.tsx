@@ -7,6 +7,19 @@ import ErrorBox from '../components/ui/ErrorBox';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 
+const dedupKey = (m: any) => m?.externalMessageId || m?.messageId || m?.id || `${m?.username || ''}|${m?.message || ''}|${m?.createdAt || ''}`;
+const dedupMessages = (messages: any[]) => {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const m of messages) {
+    const key = dedupKey(m);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+};
+
 export default function LiveChatPage() {
   const { channelId = '' } = useParams();
   const [items, setItems] = useState<any[]>([]);
@@ -19,7 +32,7 @@ export default function LiveChatPage() {
   const boxRef = useRef<HTMLDivElement>(null);
 
   const loadHistory = async () => {
-    try { const d = await apiGet<{ items: any[] }>(`/api/channels/${channelId}/chat/messages?limit=100`); setItems(d.items.reverse()); setError(''); setHistoryLoadedAt(new Date().toISOString()); }
+    try { const d = await apiGet<{ items: any[] }>(`/api/channels/${channelId}/chat/messages?limit=100`); setItems(dedupMessages(d.items.reverse())); setError(''); setHistoryLoadedAt(new Date().toISOString()); }
     catch { setError('Historie konnte nicht geladen werden.'); }
   };
 
@@ -31,7 +44,11 @@ export default function LiveChatPage() {
       setStatus((s) => s === 'disconnected' ? 'reconnecting' : s);
       es = new EventSource(`${apiBase}/api/channels/${channelId}/live/chat/stream`, { withCredentials: true });
       es.onopen = () => { setStatus('connected'); setError(''); setLiveSince((x) => x || new Date().toISOString()); };
-      es.onmessage = (evt) => { const e = JSON.parse(evt.data); if (e.type === 'system.keepalive') return; setItems((prev) => [...prev, e].slice(-500)); };
+      es.onmessage = (evt) => {
+        const e = JSON.parse(evt.data);
+        if (e.type === 'system.keepalive') return;
+        setItems((prev) => dedupMessages([...prev, e]).slice(-500));
+      };
       es.onerror = () => {
         if (closed) return;
         setStatus('reconnecting');
@@ -53,7 +70,7 @@ export default function LiveChatPage() {
     <div className='text-xs text-zinc-400'>History geladen um {historyLoadedAt ? new Date(historyLoadedAt).toLocaleTimeString() : '-'} · Live-Verbindung aktiv seit {liveSince ? new Date(liveSince).toLocaleTimeString() : '-'} · <Link className='underline' to={`/dashboard/channels/${channelId}/integrations`}>Twitch Debug prüfen</Link></div>{status === 'connected' && debug?.session?.lastMessageAt && Date.now() - new Date(debug.session.lastMessageAt).getTime() > 5 * 60 * 1000 && <div className='text-amber-400 text-sm'>Live-Verbindung zur Plattform steht, aber Twitch liefert aktuell keine neuen Events.</div>}
     {error && <ErrorBox message={error} />}
     <div ref={boxRef} className='h-[65vh] overflow-auto rounded border border-zinc-800 bg-zinc-950 p-3 space-y-2'>
-      {!filtered.length ? <EmptyState title='Keine Nachrichten' description='Noch keine Chatnachrichten sichtbar.' /> : filtered.map((m, i) => <div key={`${m.messageId || 'hist'}-${i}`} className='text-sm'><span className='text-zinc-500 mr-2'>{new Date(m.createdAt).toLocaleTimeString()}</span><span className='text-cyan-300'>{m.username}</span><span className='mx-2 text-zinc-500'>:</span><span>{m.message}</span></div>)}
+      {!filtered.length ? <EmptyState title='Keine Nachrichten' description='Noch keine Chatnachrichten sichtbar.' /> : filtered.map((m, i) => <div key={`${dedupKey(m)}-${i}`} className='text-sm'><span className='text-zinc-500 mr-2'>{new Date(m.createdAt).toLocaleTimeString()}</span><span className='text-cyan-300'>{m.username}</span><span className='mx-2 text-zinc-500'>:</span><span>{m.message}</span></div>)}
     </div>
   </div>;
 }

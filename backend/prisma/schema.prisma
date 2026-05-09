@@ -193,6 +193,8 @@ model ChatMessage {
   message           String
   createdAt         DateTime @default(now())
   channel           Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, platform, externalMessageId])
 }
 
 model CommunityUser {

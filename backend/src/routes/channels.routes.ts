@@ -358,13 +358,14 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     const session = managerHealth.sessions.find((s: any) => s.channelId === channelId);
     const lastStored = await prisma.chatMessage.findFirst({ where: { channelId }, orderBy: { createdAt: 'desc' } });
     const dayCount = await prisma.chatMessage.count({ where: { channelId, createdAt: { gte: new Date(Date.now() - 24*60*60*1000) } } });
+    const duplicateMessagesSkippedLast24h = await prisma.botEvent.count({ where: { channelId, eventType: 'chat_message_duplicate_skipped', createdAt: { gte: new Date(Date.now() - 24*60*60*1000) } } });
     const eventStats = eventBus.getChannelStats(channelId);
     const scopes = token ? JSON.parse(token.scopesJson || '[]') : [];
     return {
       channel: { id: channel.id, twitchLogin: channel.twitchLogin, twitchChannelId: channel.twitchChannelId, isActive: channel.isActive, botEnabled: channel.botEnabled },
       eventSub: { enabled: managerHealth.eventSubEnabled, transportKey: session?.transportKey ?? null, connected: Boolean(managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.connected), sessionIdPresent: Boolean(managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.sessionIdPresent), lastWelcomeAt: managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.lastWelcomeAt ?? null, lastError: managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.lastError ?? null },
       session: { exists: Boolean(session), status: session?.status ?? 'missing', connected: Boolean(session?.connected), subscribed: Boolean(session?.subscribed), subscriptionsCount: session?.subscriptionsCount ?? 0, lastConnectedAt: session?.lastConnectedAt ?? null, lastSubscriptionAt: session?.lastSubscriptionAt ?? null, lastMessageAt: session?.lastMessageAt ?? null, lastError: session?.lastError ?? null },
-      chat: { lastStoredMessageAt: lastStored?.createdAt ?? null, storedMessagesLast24h: dayCount },
+      chat: { lastStoredMessageAt: lastStored?.createdAt ?? null, storedMessagesLast24h: dayCount, duplicateMessagesSkippedLast24h },
       liveStream: eventStats,
       tokens: { hasBroadcasterToken: Boolean(token), broadcasterScopes: scopes, hasPlatformBotToken: Boolean(bot?.accessTokenEncrypted), platformBotScopes: bot ? JSON.parse(bot.scopesJson || '[]') : [] },
       platformBot: { connected: Boolean(bot), moderatorStatus: botStatus?.status ?? 'unknown', canSendAsPlatformBot: Boolean(botStatus?.isModerator) }
