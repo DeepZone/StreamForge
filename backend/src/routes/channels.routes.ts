@@ -362,7 +362,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     const scopes = token ? JSON.parse(token.scopesJson || '[]') : [];
     return {
       channel: { id: channel.id, twitchLogin: channel.twitchLogin, twitchChannelId: channel.twitchChannelId, isActive: channel.isActive, botEnabled: channel.botEnabled },
-      eventSub: { enabled: managerHealth.eventSubEnabled, connected: managerHealth.eventSubConnected, sessionIdPresent: managerHealth.eventSubSessionIdPresent, lastWelcomeAt: managerHealth.eventSubLastWelcomeAt, lastReconnectAt: managerHealth.eventSubLastReconnectAt, lastError: managerHealth.eventSubLastError },
+      eventSub: { enabled: managerHealth.eventSubEnabled, transportKey: session?.transportKey ?? null, connected: Boolean(managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.connected), sessionIdPresent: Boolean(managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.sessionIdPresent), lastWelcomeAt: managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.lastWelcomeAt ?? null, lastError: managerHealth.transports?.find((t: any) => t.key === session?.transportKey)?.lastError ?? null },
       session: { exists: Boolean(session), status: session?.status ?? 'missing', connected: Boolean(session?.connected), subscribed: Boolean(session?.subscribed), subscriptionsCount: session?.subscriptionsCount ?? 0, lastConnectedAt: session?.lastConnectedAt ?? null, lastSubscriptionAt: session?.lastSubscriptionAt ?? null, lastMessageAt: session?.lastMessageAt ?? null, lastError: session?.lastError ?? null },
       chat: { lastStoredMessageAt: lastStored?.createdAt ?? null, storedMessagesLast24h: dayCount },
       liveStream: eventStats,

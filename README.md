@@ -627,3 +627,11 @@ Wenn `scope_missing` angezeigt wird, Twitch-Kanal erneut verbinden, damit `chann
 7. Wieder im Twitch Chat schreiben.
 8. Livechat muss aktualisieren.
 9. Command `!ping` (oder Channel-Prefix) testen.
+
+## Twitch EventSub WebSocket User-Kontext
+
+Twitch erlaubt auf einer einzelnen EventSub-WebSocket-Session keine Subscriptions, die mit unterschiedlichen User-Kontexten erstellt werden.
+
+Darum nutzt StreamForge pro Broadcaster/User-Kontext eine eigene EventSub-WebSocket-Verbindung (Transport-Isolation pro User-ID).
+
+Der Plattform-Bot wird dabei nicht als normaler Channel subscribed. Der Plattform-Bot ist Sender/Moderator und wird nicht automatisch als beobachteter Channel gestartet.
