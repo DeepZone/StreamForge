@@ -392,3 +392,20 @@ Wichtig:
 - Community Radar ist heuristisch.
 - Keine automatische Moderation.
 - Timer sind abhängig von Worker/Backend-Laufzeit.
+
+## Neue Twitch-Chat Features
+
+- Live Chat im Dashboard (`/dashboard/channels/:channelId/live-chat`)
+- Aktuelle Chatters im Dashboard (`/dashboard/channels/:channelId/chatters`)
+- Chatters werden mit CommunityUser-Daten (firstSeen/lastSeen/messageCount/commandCount) angereichert
+- Chatters-Liste kann bei Twitch verzögert aktualisiert werden
+- Neuer benötigter Scope: `moderator:read:chatters`
+- Nach Scope-Änderung muss Twitch OAuth erneut durchgeführt werden, damit das Token den Scope enthält
+
+### Testablauf (Live Chat + Chatters)
+1. Twitch neu verbinden.
+2. EventSub aktivieren.
+3. Im Twitch Chat Nachrichten schreiben.
+4. Dashboard → Live Chat öffnen.
+5. Dashboard → Chatters öffnen.
+6. Prüfen, ob Chatters angezeigt werden.

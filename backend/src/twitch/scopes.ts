@@ -6,7 +6,9 @@ export const TWITCH_MVP_SCOPES = [
   'user:write:chat',
   // Bot permission scopes used by EventSub chat subscriptions.
   'channel:bot',
-  'user:bot'
+  'user:bot',
+  // Needed to read current chatters via Helix chatters endpoint.
+  'moderator:read:chatters'
 ] as const;
 
 export const hasRequiredScopes = (scopes: string[]) => {

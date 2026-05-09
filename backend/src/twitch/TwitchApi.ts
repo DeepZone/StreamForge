@@ -2,6 +2,7 @@ import { assertTwitchOAuthConfig, env } from '../config/env.js';
 
 export type TokenResponse = { access_token: string; refresh_token: string; expires_in: number; scope?: string[]; token_type: string };
 type TwitchUser = { id: string; login: string; display_name: string; profile_image_url: string };
+type TwitchChatter = { user_id: string; user_login: string; user_name: string };
 
 export class TwitchApiError extends Error {
   status: number;
@@ -75,5 +76,16 @@ export class TwitchApi {
   async getEventSubSubscriptions(accessToken: string) {
     const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', { headers: this.baseHeaders(accessToken) });
     return this.parseResponse(res, 'get_eventsub_subscriptions');
+  }
+
+  async getChatters(params: { broadcasterId: string; moderatorId: string; accessToken: string; first?: number; after?: string }) {
+    const first = Math.min(Math.max(params.first ?? 100, 1), 1000);
+    const url = new URL('https://api.twitch.tv/helix/chat/chatters');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('moderator_id', params.moderatorId);
+    url.searchParams.set('first', String(first));
+    if (params.after) url.searchParams.set('after', params.after);
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    return this.parseResponse<{ data: TwitchChatter[]; pagination?: { cursor?: string }; total?: number }>(res, 'get_chatters');
   }
 }
