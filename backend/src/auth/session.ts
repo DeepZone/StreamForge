@@ -20,6 +20,11 @@ const twitchStateCookieOptions = {
   path: '/api/auth/twitch',
   maxAge: 60 * 10
 } as const;
+const twitchBotStateCookieOptions = {
+  ...baseCookieOptions,
+  path: '/api/auth/twitch/bot',
+  maxAge: 60 * 10
+} as const;
 
 export const setSession = (reply: FastifyReply, user: SessionUser) =>
   reply.setCookie('sf_session', JSON.stringify(user), { ...sessionCookieOptions, signed: true });
@@ -50,3 +55,16 @@ export const getTwitchOAuthState = (req: FastifyRequest): string | null => {
 };
 
 export const clearTwitchOAuthState = (reply: FastifyReply) => reply.clearCookie('sf_twitch_oauth_state', twitchStateCookieOptions);
+
+export const setTwitchBotOAuthState = (reply: FastifyReply, state: string) =>
+  reply.setCookie('sf_twitch_bot_oauth_state', state, { ...twitchBotStateCookieOptions, signed: true });
+
+export const getTwitchBotOAuthState = (req: FastifyRequest): string | null => {
+  const signedValue = (req.cookies as Record<string, string>).sf_twitch_bot_oauth_state;
+  if (!signedValue) return null;
+  const unsigned = req.unsignCookie(signedValue);
+  if (!unsigned.valid || !unsigned.value) return null;
+  return unsigned.value;
+};
+
+export const clearTwitchBotOAuthState = (reply: FastifyReply) => reply.clearCookie('sf_twitch_bot_oauth_state', twitchBotStateCookieOptions);

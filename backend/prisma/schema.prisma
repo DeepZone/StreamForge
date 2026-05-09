@@ -61,6 +61,33 @@ model Channel {
   discord         DiscordIntegration?
   notes           ModerationNote[]
   actions         ModerationAction[]
+  botAccountLinks ChannelBotAccount[]
+}
+
+model TwitchBotAccount {
+  id                    String              @id @default(cuid())
+  twitchUserId          String              @unique
+  twitchLogin           String
+  displayName           String
+  avatarUrl             String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  scopesJson            String
+  expiresAt             DateTime
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  channelLinks          ChannelBotAccount[]
+}
+
+model ChannelBotAccount {
+  id                 String           @id @default(cuid())
+  channelId          String           @unique
+  twitchBotAccountId String
+  enabled            Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  channel            Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  botAccount         TwitchBotAccount @relation(fields: [twitchBotAccountId], references: [id], onDelete: Restrict)
 }
 
 model ChannelMember {

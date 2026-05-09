@@ -5,6 +5,10 @@ import { AuthedRequest, isAdmin, requireAuth, requireChannelRole } from '../auth
 import { decryptSecret, encryptSecret } from '../utils/crypto.js';
 import { TwitchApi, TwitchApiError } from '../twitch/TwitchApi.js';
 import { eventBus } from '../core/EventBus.js';
+import crypto from 'crypto';
+import { env } from '../config/env.js';
+import { setTwitchBotOAuthState } from '../auth/session.js';
+import { TWITCH_BOT_ACCOUNT_SCOPES } from '../twitch/scopes.js';
 
 const twitchApi = new TwitchApi();
 
@@ -105,6 +109,37 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
       if (e instanceof TwitchApiError && e.status === 403) return rep.code(400).send({ errorCode: 'twitch.chatters.missing_scope', detail: 'Bitte Twitch neu verbinden.' });
       return rep.code(502).send({ errorCode: 'twitch.chatters.fetch_failed' });
     }
+  });
+
+  app.get('/api/channels/:channelId/twitch/bot/start', { preHandler: requireAuth }, async (req, rep) => {
+    const authed = req as AuthedRequest;
+    await requireChannelRole(authed, rep, 'channel_admin');
+    const { channelId } = req.params as { channelId: string };
+    const state = crypto.randomBytes(32).toString('hex');
+    setTwitchBotOAuthState(rep, state);
+    rep.setCookie('sf_twitch_bot_oauth_meta', JSON.stringify({ channelId }), { path: '/api/auth/twitch/bot', signed: true, httpOnly: true, sameSite: 'lax', secure: env.nodeEnv === 'production', maxAge: 60 * 10 });
+    const url = new URL('https://id.twitch.tv/oauth2/authorize');
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', env.twitchClientId);
+    url.searchParams.set('redirect_uri', `${env.publicApiUrl}/api/auth/twitch/bot/callback`);
+    url.searchParams.set('scope', TWITCH_BOT_ACCOUNT_SCOPES.join(' '));
+    url.searchParams.set('state', state);
+    return rep.code(302).redirect(url.toString());
+  });
+
+  app.get('/api/channels/:channelId/twitch/bot', { preHandler: requireAuth }, async (req, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
+    const { channelId } = req.params as { channelId: string };
+    const link = await prisma.channelBotAccount.findUnique({ where: { channelId }, include: { botAccount: true } });
+    if (!link) return { connected: false, sendAs: 'broadcaster' };
+    return { connected: true, enabled: link.enabled, sendAs: link.enabled ? 'bot_account' : 'broadcaster', botLogin: link.botAccount.twitchLogin, botDisplayName: link.botAccount.displayName, expiresAt: link.botAccount.expiresAt, scopes: JSON.parse(link.botAccount.scopesJson || '[]') };
+  });
+
+  app.delete('/api/channels/:channelId/twitch/bot', { preHandler: requireAuth }, async (req, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
+    const { channelId } = req.params as { channelId: string };
+    await prisma.channelBotAccount.deleteMany({ where: { channelId } });
+    return { ok: true };
   });
 };
 export default channelsRoutes;

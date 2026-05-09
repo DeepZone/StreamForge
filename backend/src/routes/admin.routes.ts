@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { Role } from '@prisma/client';
 import { isAdmin, requireAuth, AuthedRequest } from '../auth/guards.js';
 import { env, getMissingTwitchOAuthEnvVars, isTokenEncryptionKeyValid } from '../config/env.js';
-import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
+import { TWITCH_BOT_ACCOUNT_SCOPES, TWITCH_BROADCASTER_SCOPES } from '../twitch/scopes.js';
 import { twitchConnectionManager } from '../twitch/managerSingleton.js';
 import { audit } from '../services/auditService.js';
 import { getTimerWorkerHealth } from '../workers/timerWorker.js';
@@ -42,7 +42,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       cookieSameSite: env.cookieSameSite,
       nodeEnv: env.nodeEnv,
       trustProxy: env.trustProxy,
-      scopes: [...TWITCH_MVP_SCOPES]
+      scopes: { broadcaster: [...TWITCH_BROADCASTER_SCOPES], botAccount: [...TWITCH_BOT_ACCOUNT_SCOPES] }
     };
   });
   app.post('/api/admin/twitch/sessions/start-all', { preHandler: requireAuth }, async (req, rep) => {

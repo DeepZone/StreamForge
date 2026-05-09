@@ -409,3 +409,18 @@ Wichtig:
 4. Dashboard → Live Chat öffnen.
 5. Dashboard → Chatters öffnen.
 6. Prüfen, ob Chatters angezeigt werden.
+
+## Als separater Bot-Name im Twitch Chat senden
+
+Twitch zeigt immer den Namen des Accounts an, dessen OAuth-Token zum Senden genutzt wird.
+Wenn ein anderer Name im Chat erscheinen soll, muss ein separater Twitch-Bot-Account verbunden werden.
+
+- Der Kanal sollte den Bot-Account als Moderator setzen: `/mod BOTNAME`.
+- Danach in StreamForge: `Dashboard -> Integrationen -> Twitch Bot Account verbinden`.
+- Bei Twitch mit dem gewünschten Bot-Account anmelden.
+- Danach sendet StreamForge im Chat als Bot-Account.
+- Ohne verbundenen Bot-Account sendet StreamForge weiterhin als Broadcaster.
+
+### Scope-Hinweis
+
+Nach Scope-Änderungen muss Twitch OAuth erneut durchgeführt werden (Broadcaster- und/oder Bot-Flow).

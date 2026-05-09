@@ -3,15 +3,15 @@ import { FastifyPluginAsync } from 'fastify';
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { verifyPassword } from '../auth/password.js';
-import { clearSession, clearTwitchOAuthState, getTwitchOAuthState, setSession, setTwitchOAuthState } from '../auth/session.js';
+import { clearSession, clearTwitchBotOAuthState, clearTwitchOAuthState, getTwitchBotOAuthState, getTwitchOAuthState, setSession, setTwitchBotOAuthState, setTwitchOAuthState } from '../auth/session.js';
 import { requireAuth, AuthedRequest } from '../auth/guards.js';
 import { assertTokenEncryptionKey, assertTwitchOAuthConfig, env, getMissingTwitchOAuthEnvVars, isTokenEncryptionKeyValid } from '../config/env.js';
 import { TwitchApi, TwitchApiError } from '../twitch/TwitchApi.js';
 import { encryptSecret } from '../utils/crypto.js';
-import { TWITCH_MVP_SCOPES } from '../twitch/scopes.js';
+import { TWITCH_BOT_ACCOUNT_SCOPES, TWITCH_BROADCASTER_SCOPES } from '../twitch/scopes.js';
 
 const twitchApi = new TwitchApi();
-const twitchScopes = [...TWITCH_MVP_SCOPES];
+const twitchScopes = [...TWITCH_BROADCASTER_SCOPES];
 
 const baseProblem = (req: any, errorCode: string, status: number, detail: string, debug?: Record<string, unknown>) => {
   const payload: Record<string, unknown> = { errorCode, status, detail, requestId: req.id, path: req.url, method: req.method, timestamp: new Date().toISOString() };
@@ -112,6 +112,38 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       if (cause instanceof Prisma.PrismaClientKnownRequestError || cause instanceof Prisma.PrismaClientValidationError || cause instanceof Prisma.PrismaClientUnknownRequestError) return sendProblem(req, rep, 'twitch.oauth.persistence_failed', 500, 'Twitch-Konto konnte nicht gespeichert werden.', { ...twitchDebug(), failedStep: error?.step ?? 'unknown' });
       app.log.error({ requestId: req.id, error }, 'twitch oauth callback failed');
       return sendProblem(req, rep, 'twitch.oauth.callback_failed', 500, 'Unerwarteter Fehler im OAuth-Callback.', twitchDebug());
+    }
+  });
+
+  app.get('/api/auth/twitch/bot/callback', async (req: any, rep) => {
+    const query = req.query as { code?: string; state?: string; error?: string; error_description?: string };
+    if (query.error) return sendProblem(req, rep, 'twitch.bot_oauth.provider_error', 400, 'Twitch Bot OAuth wurde vom Provider abgelehnt.');
+    if (!query.code || !query.state) return sendProblem(req, rep, 'twitch.bot_oauth.invalid_callback', 400, 'OAuth-Callback ist unvollständig.');
+    const stateRaw = getTwitchBotOAuthState(req);
+    if (!stateRaw || stateRaw !== query.state) {
+      clearTwitchBotOAuthState(rep);
+      return sendProblem(req, rep, 'twitch.bot_oauth.invalid_state', 400, 'OAuth-State ist ungültig oder abgelaufen.');
+    }
+    const stateData = req.unsignCookie((req.cookies as any).sf_twitch_bot_oauth_meta);
+    if (!stateData?.valid || !stateData?.value) return sendProblem(req, rep, 'twitch.bot_oauth.invalid_state_payload', 400, 'OAuth-State Kontext fehlt.');
+    const parsed = JSON.parse(stateData.value) as { channelId: string };
+    try {
+      const tokens = await twitchApi.exchangeCodeForToken(query.code);
+      const twitchUser = await twitchApi.getCurrentUser(tokens.access_token);
+      const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+      await prisma.$transaction(async (tx) => {
+        const bot = await tx.twitchBotAccount.upsert({
+          where: { twitchUserId: twitchUser.id },
+          create: { twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope ?? []), expiresAt },
+          update: { twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, accessTokenEncrypted: encryptSecret(tokens.access_token), refreshTokenEncrypted: encryptSecret(tokens.refresh_token), scopesJson: JSON.stringify(tokens.scope ?? []), expiresAt }
+        });
+        await tx.channelBotAccount.upsert({ where: { channelId: parsed.channelId }, create: { channelId: parsed.channelId, twitchBotAccountId: bot.id, enabled: true }, update: { twitchBotAccountId: bot.id, enabled: true } });
+      });
+      clearTwitchBotOAuthState(rep);
+      rep.clearCookie('sf_twitch_bot_oauth_meta', { path: '/api/auth/twitch/bot' });
+      return rep.redirect(`${env.publicAppUrl}/dashboard/channels/${parsed.channelId}/integrations`);
+    } catch (error: any) {
+      return sendProblem(req, rep, 'twitch.bot_oauth.callback_failed', 500, 'Bot-Account konnte nicht verbunden werden.');
     }
   });
 
