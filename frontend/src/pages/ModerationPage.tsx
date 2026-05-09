@@ -20,13 +20,15 @@ export default function ModerationPage() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState({ actionType: '', username: '' });
 
+  const toErrorMessage = (e: any, fallback: string) => e?.data?.hint || e?.data?.detail || e?.data?.errorCode || fallback;
+
   const loadActions = () => apiGet<any>(`/api/channels/${channelId}/moderation/actions?limit=100&actionType=${filter.actionType}&username=${encodeURIComponent(filter.username)}`)
     .then((d) => setActions(d.actions || []))
-    .catch((e: any) => setError(e?.data?.errorCode || 'Fehler'));
+    .catch((e: any) => setError(toErrorMessage(e, 'Fehler')));
 
   const loadRestrictedUsers = () => apiGet<any>(`/api/channels/${channelId}/moderation/restricted-users`)
     .then((d) => setRestrictedUsers(d.users || []))
-    .catch((e: any) => setError(e?.data?.errorCode || 'Fehler'));
+    .catch((e: any) => setError(toErrorMessage(e, 'Fehler')));
 
   useEffect(() => {
     void loadActions();
@@ -46,7 +48,7 @@ export default function ModerationPage() {
       await apiPost(`/api/channels/${channelId}/moderation/${form.action}`, body);
       await Promise.all([loadActions(), loadRestrictedUsers()]);
     } catch (e: any) {
-      setError(e?.data?.errorCode || 'Aktion fehlgeschlagen');
+      setError(toErrorMessage(e, 'Aktion fehlgeschlagen'));
     } finally {
       setLoading(false);
     }
