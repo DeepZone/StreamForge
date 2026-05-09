@@ -1,7 +1,7 @@
 import { Platform } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { decryptSecret } from '../utils/crypto.js';
 import { TwitchApi } from '../twitch/TwitchApi.js';
+import { resolveChatSendAuth } from '../twitch/chatSenderAuth.js';
 
 const api = new TwitchApi();
 const runningTimers = new Set<string>();
@@ -29,11 +29,10 @@ const runTick = async () => {
     if (runningTimers.has(timer.id)) continue;
     runningTimers.add(timer.id);
     try {
-      const token = timer.channel.tokens;
-      if (!token || token.expiresAt <= now) throw new Error('token_missing_or_expired');
       if (timer.lastRunAt && now.getTime() - timer.lastRunAt.getTime() < timer.intervalMinutes * 60_000) continue;
-      const accessToken = decryptSecret(token.accessTokenEncrypted);
-      await api.sendChatMessage({ broadcasterId: timer.channel.twitchChannelId, senderId: timer.channel.twitchChannelId, accessToken, message: timer.message });
+      const sendAuth = await resolveChatSendAuth(timer.channelId);
+      if (!sendAuth.accessToken) throw new Error(`token_${sendAuth.botTokenStatus}`);
+      await api.sendChatMessage({ broadcasterId: sendAuth.broadcasterId, senderId: sendAuth.senderId, accessToken: sendAuth.accessToken, message: timer.message });
       await prisma.timer.update({ where: { id: timer.id }, data: { lastRunAt: now } });
       await logEvent(timer.channelId, 'timer_executed', { timerId: timer.id, timerName: timer.name });
     } catch (e: any) {

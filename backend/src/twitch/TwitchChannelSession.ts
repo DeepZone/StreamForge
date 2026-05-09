@@ -6,6 +6,7 @@ import { TenantContext } from '../core/TenantContext.js';
 import { eventBus } from '../core/EventBus.js';
 import { TwitchApi } from './TwitchApi.js';
 import { recordChatMessage } from '../services/communityService.js';
+import { resolveChatSendAuth } from './chatSenderAuth.js';
 
 export type TwitchSessionStatus = 'idle' | 'starting' | 'connected' | 'subscribed' | 'reconnecting' | 'stopped' | 'token_error' | 'error' | 'auth_required';
 
@@ -141,8 +142,9 @@ export class TwitchChannelSession {
     const response = await this.botCore.handleMessage({ platform: 'twitch', channelId: this.channelId, externalMessageId: evt.message_id, userId: evt.chatter_user_id, username: evt.chatter_user_login, content: evt.message?.text ?? '', isMod: evt.chatter_is_moderator, isBroadcaster: evt.chatter_is_broadcaster }, new TenantContext(this.channelId, 'twitch'));
     if (response?.content) {
       try {
-        await this.validateAndLoadToken();
-        await this.api.sendChatMessage({ broadcasterId: this.channelTwitchId, senderId: this.ownerTwitchId, accessToken: this.accessToken, message: response.content });
+        const sendAuth = await resolveChatSendAuth(this.channelId);
+        if (!sendAuth.accessToken) throw new Error(`chat_send_token_${sendAuth.botTokenStatus}`);
+        await this.api.sendChatMessage({ broadcasterId: sendAuth.broadcasterId, senderId: sendAuth.senderId, accessToken: sendAuth.accessToken, message: response.content });
         await this.logEvent('command_executed', { messageId: evt.message_id ?? null });
       } catch (e: any) {
         this.lastError = e?.message ?? 'command_failed';
@@ -152,7 +154,7 @@ export class TwitchChannelSession {
   }
 
   getHealth() {
-    return { channelId: this.channelId, twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin, status: this.status, connected: ['connected', 'subscribed'].includes(this.status), subscribed: this.status === 'subscribed', lastError: this.lastError, lastConnectedAt: this.lastConnectedAt, lastMessageAt: this.lastMessageAt, lastSubscriptionAt: this.lastSubscriptionAt, reconnectCount: this.reconnectCount, subscriptionsCount: this.subscriptionsCount };
+    return { channelId: this.channelId, twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin, status: this.status, connected: ['connected', 'subscribed'].includes(this.status), subscribed: this.status === 'subscribed', lastError: this.lastError, lastConnectedAt: this.lastConnectedAt, lastMessageAt: this.lastMessageAt, lastSubscriptionAt: this.lastSubscriptionAt, reconnectCount: this.reconnectCount, subscriptionsCount: this.subscriptionsCount, sendAs: 'unknown' };
   }
 
   getBroadcasterTwitchId() { return this.channelTwitchId; }

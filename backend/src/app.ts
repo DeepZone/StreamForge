@@ -12,7 +12,7 @@ import campaignsRoutes from './routes/campaigns.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import communityRoutes from './routes/community.routes.js';
 import recapsRoutes from './routes/recaps.routes.js';
-import { TWITCH_MVP_SCOPES } from './twitch/scopes.js';
+import { TWITCH_BROADCASTER_SCOPES } from './twitch/scopes.js';
 
 const app = Fastify({ trustProxy: env.trustProxy, bodyLimit: 256 * 1024, disableRequestLogging: true });
 app.register(cookie, { secret: env.sessionSecret });
@@ -48,7 +48,7 @@ app.get('/api/public/twitch/config', async () => ({
   hasTokenEncryptionKey: Boolean(env.tokenKey),
   tokenEncryptionKeyValid: isTokenEncryptionKeyValid(),
   eventSubEnabled: env.twitchEventSubEnabled,
-  scopes: [...TWITCH_MVP_SCOPES]
+  scopes: [...TWITCH_BROADCASTER_SCOPES]
 }));
 
 app.get('/api/public/twitch/oauth-url', async () => {
@@ -56,8 +56,8 @@ app.get('/api/public/twitch/oauth-url', async () => {
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', env.twitchClientId || 'missing_client_id');
   url.searchParams.set('redirect_uri', env.twitchRedirectUri);
-  url.searchParams.set('scope', TWITCH_MVP_SCOPES.join(' '));
-  return { authorizeUrl: url.toString(), redirectUri: env.twitchRedirectUri, scopes: [...TWITCH_MVP_SCOPES] };
+  url.searchParams.set('scope', TWITCH_BROADCASTER_SCOPES.join(' '));
+  return { authorizeUrl: url.toString(), redirectUri: env.twitchRedirectUri, scopes: [...TWITCH_BROADCASTER_SCOPES] };
 });
 
 app.register(setupRoutes); app.register(authRoutes); app.register(channelsRoutes); app.register(commandsRoutes); app.register(timersRoutes); app.register(campaignsRoutes); app.register(adminRoutes); app.register(communityRoutes); app.register(recapsRoutes);
