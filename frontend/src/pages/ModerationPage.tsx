@@ -1,105 +1,75 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiPost } from '../api/client';
 import ErrorBox from '../components/ui/ErrorBox';
 
-const DURATIONS = [
-  { label: '60 Sekunden', value: 60 },
-  { label: '5 Minuten', value: 300 },
-  { label: '10 Minuten', value: 600 },
-  { label: '1 Stunde', value: 3600 },
-  { label: '24 Stunden', value: 86400 }
-];
-
 export default function ModerationPage() {
   const { channelId = '' } = useParams();
-  const [form, setForm] = useState<any>({ action: 'timeout', userId: '', username: '', reason: '', duration: 300, customDuration: 300 });
+  const [items, setItems] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
-  const [restrictedUsers, setRestrictedUsers] = useState<any[]>([]);
+  const [type, setType] = useState<'all'|'bans'|'timeouts'>('all');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState({ actionType: '', username: '' });
+  const [form, setForm] = useState<any>({ userId: '', username: '', action: 'ban', durationSeconds: 300, reason: '' });
 
-  const toErrorMessage = (e: any, fallback: string) => e?.data?.hint || e?.data?.detail || e?.data?.errorCode || fallback;
-
-  const loadActions = () => apiGet<any>(`/api/channels/${channelId}/moderation/actions?limit=100&actionType=${filter.actionType}&username=${encodeURIComponent(filter.username)}`)
-    .then((d) => setActions(d.actions || []))
-    .catch((e: any) => setError(toErrorMessage(e, 'Fehler')));
-
-  const loadRestrictedUsers = () => apiGet<any>(`/api/channels/${channelId}/moderation/restricted-users`)
-    .then((d) => setRestrictedUsers(d.users || []))
-    .catch((e: any) => setError(toErrorMessage(e, 'Fehler')));
-
-  useEffect(() => {
-    void loadActions();
-  }, [channelId, filter.actionType, filter.username]);
-
-  useEffect(() => {
-    void loadRestrictedUsers();
-  }, [channelId]);
-
-  const submit = async () => {
-    if (!confirm('Moderationsaktionen werden direkt auf Twitch ausgeführt. Fortfahren?')) return;
-    setLoading(true);
-    setError('');
-    try {
-      const body: any = { userId: form.userId, username: form.username || undefined, reason: form.reason || undefined };
-      if (form.action === 'timeout') body.durationSeconds = form.duration === 'custom' ? Number(form.customDuration) : Number(form.duration);
-      await apiPost(`/api/channels/${channelId}/moderation/${form.action}`, body);
-      await Promise.all([loadActions(), loadRestrictedUsers()]);
-    } catch (e: any) {
-      setError(toErrorMessage(e, 'Aktion fehlgeschlagen'));
-    } finally {
-      setLoading(false);
-    }
+  const load = async () => {
+    const q = new URLSearchParams({ limit: '100', type, username });
+    const [bans, log] = await Promise.all([
+      apiGet<any>(`/api/channels/${channelId}/moderation/bans?${q.toString()}`),
+      apiGet<any>(`/api/channels/${channelId}/moderation/actions?limit=50`)
+    ]);
+    setItems(bans.items || []);
+    setActions(log.actions || []);
   };
+
+  useEffect(() => { void load().catch(handleErr); }, [channelId, type]);
+
+  const handleErr = (e: any) => {
+    if (e?.data?.errorCode === 'twitch.moderation.scope_missing') setError('Bitte Twitch erneut verbinden, damit StreamForge Bans und Timeouts verwalten darf. Fehlender Scope: moderator:manage:banned_users');
+    else setError(e?.data?.hint || e?.data?.errorCode || 'Fehler');
+  };
+
+  const submitManual = async () => {
+    const isUnban = form.action === 'unban' || form.action === 'untimeout';
+    if (!confirm('Diese Änderung wird direkt auf Twitch ausgeführt. Fortfahren?')) return;
+    const path = isUnban ? 'unban' : form.action;
+    const body: any = { userId: form.userId, username: form.username || undefined, reason: form.reason || undefined };
+    if (form.action === 'timeout') body.durationSeconds = Number(form.durationSeconds);
+    if (isUnban) body.actionLabel = form.action;
+    await apiPost(`/api/channels/${channelId}/moderation/${path}`, body);
+    await load();
+  };
+
+  const filtered = useMemo(() => items.filter((x) => !username || (x.userName || x.userLogin || '').toLowerCase().includes(username.toLowerCase())), [items, username]);
 
   return <div className='space-y-4'>
     <h1 className='text-xl font-bold'>Moderation</h1>
-    <p className='text-sm text-amber-300'>Moderationsaktionen werden direkt auf Twitch ausgeführt. Kein Auto-Ban, kein Auto-Timeout.</p>
+    <p className='text-sm text-amber-300'>Hier siehst du aktive Twitch-Bans und Timeouts und kannst sie entfernen.</p>
     {error && <ErrorBox message={error} />}
+    {error.includes('moderator:manage:banned_users') && <Link className='underline text-blue-300' to='/api/auth/twitch/start'>Twitch erneut verbinden</Link>}
 
     <div className='border p-3 space-y-2'>
-      <input className='border px-2 py-1 w-full' placeholder='Twitch User ID' value={form.userId} onChange={e => setForm({ ...form, userId: e.target.value })} />
-      <input className='border px-2 py-1 w-full' placeholder='Username (optional)' value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
-      <select className='border px-2 py-1 w-full' value={form.action} onChange={e => setForm({ ...form, action: e.target.value })}>
-        <option value='timeout'>Timeout</option>
-        <option value='ban'>Ban</option>
-      </select>
-      {form.action === 'timeout' && <>
-        <select className='border px-2 py-1 w-full' value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })}>
-          {DURATIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          <option value='custom'>Custom</option>
-        </select>
-        {form.duration === 'custom' && <input className='border px-2 py-1 w-full' type='number' min={1} max={1209600} value={form.customDuration} onChange={e => setForm({ ...form, customDuration: e.target.value })} />}
-      </>}
-      <input className='border px-2 py-1 w-full' placeholder='Grund (optional)' value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
-      <button disabled={loading} className='border px-3 py-1' onClick={submit}>{loading ? 'Sende...' : 'Aktion ausführen'}</button>
-    </div>
-
-    <div className='border p-3 space-y-2'>
-      <h2 className='font-semibold'>Aktive Einschränkungen</h2>
-      {!restrictedUsers.length
-        ? <p className='text-sm text-slate-400'>Aktuell sind keine User gebannt oder getimeoutet.</p>
-        : <div className='space-y-2'>{restrictedUsers.map((u) => <div key={`${u.userId}-${u.expiresAt || 'ban'}`} className='border p-2 text-sm'>
-          <div className='font-medium'>{u.username}</div>
-          <div className='text-slate-400'>{u.expiresAt ? `Timeout bis ${new Date(u.expiresAt).toLocaleString()}` : 'Permanent gebannt'}</div>
-          {u.reason && <div className='text-slate-500'>Grund: {u.reason}</div>}
-        </div>)}</div>}
-    </div>
-
-    <div className='border p-3 space-y-2'>
-      <h2 className='font-semibold'>Moderation Log</h2>
       <div className='flex gap-2'>
-        <input className='border px-2 py-1' placeholder='Filter Username' value={filter.username} onChange={e => setFilter({ ...filter, username: e.target.value })} />
-        <select className='border px-2 py-1' value={filter.actionType} onChange={e => setFilter({ ...filter, actionType: e.target.value })}>
-          <option value=''>Alle</option>
-          <option value='timeout'>timeout</option>
-          <option value='ban'>ban</option>
-          <option value='unban'>unban</option>
-        </select>
+        <button className='border px-3 py-1' onClick={() => void load().catch(handleErr)}>Aktualisieren</button>
+        <select className='border px-2 py-1' value={type} onChange={e => setType(e.target.value as any)}><option value='all'>Alle</option><option value='bans'>Bans</option><option value='timeouts'>Timeouts</option></select>
+        <input className='border px-2 py-1' placeholder='Suche nach Username' value={username} onChange={(e) => setUsername(e.target.value)} />
       </div>
-      {!actions.length ? <p className='text-sm text-slate-400'>Noch keine Moderationsaktionen.</p> : actions.map((a) => <div key={a.id} className='border p-2 text-sm'>{a.actionType} · {a.targetUsername || a.targetExternalUserId} {a.durationSeconds ? `· ${a.durationSeconds}s` : ''} · {new Date(a.createdAt).toLocaleString()}</div>)}
+      <table className='w-full text-sm'>
+        <thead><tr><th>User</th><th>Typ</th><th>Grund</th><th>Erstellt am</th><th>Läuft ab</th><th>Moderator</th><th>Aktion</th></tr></thead>
+        <tbody>{filtered.map((u) => <tr key={`${u.userId}-${u.expiresAt || 'ban'}`}><td>{u.userName || u.userLogin}</td><td>{u.type === 'ban' ? 'Ban' : 'Timeout'}</td><td>{u.reason || '-'}</td><td>{u.createdAt ? new Date(u.createdAt).toLocaleString() : '-'}</td><td>{u.expiresAt ? new Date(u.expiresAt).toLocaleString() : '-'}</td><td>{u.moderatorName || '-'}</td><td><button className='underline' onClick={async () => { const label = u.type === 'ban' ? 'unban' : 'untimeout'; const msg = u.type === 'ban' ? `Möchtest du @${u.userName || u.userLogin} wirklich entbannen?` : `Möchtest du den Timeout von @${u.userName || u.userLogin} wirklich entfernen?`; if (!confirm(`${msg}\nDiese Änderung wird direkt auf Twitch ausgeführt.`)) return; await apiPost(`/api/channels/${channelId}/moderation/unban`, { userId: u.userId, username: u.userName || u.userLogin, actionLabel: label }); await load(); }}> {u.type === 'ban' ? 'Entbannen' : 'Timeout entfernen'} </button></td></tr>)}</tbody>
+      </table>
     </div>
+
+    <div className='border p-3 space-y-2'>
+      <h2 className='font-semibold'>Manuelle Aktion</h2>
+      <input className='border px-2 py-1 w-full' placeholder='User ID' value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} />
+      <input className='border px-2 py-1 w-full' placeholder='Username optional' value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+      <select className='border px-2 py-1 w-full' value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}><option value='ban'>Ban</option><option value='timeout'>Timeout</option><option value='unban'>Unban</option><option value='untimeout'>Timeout entfernen</option></select>
+      {form.action === 'timeout' && <input className='border px-2 py-1 w-full' type='number' min={1} max={1209600} value={form.durationSeconds} onChange={e => setForm({ ...form, durationSeconds: e.target.value })} />}
+      <input className='border px-2 py-1 w-full' placeholder='Grund optional' value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
+      <button className='border px-3 py-1' onClick={() => void submitManual().catch(handleErr)}>Ausführen</button>
+    </div>
+
+    <div className='border p-3 space-y-2'><h2 className='font-semibold'>Moderationshistorie</h2>{actions.map((a) => <div key={a.id} className='text-sm'>{new Date(a.createdAt).toLocaleString()} · {a.actionType} · {a.targetUsername || a.targetExternalUserId} · {a.durationSeconds || '-'} · {a.reason || '-'} · {a.createdByUserId || '-'}</div>)}</div>
   </div>;
 }
