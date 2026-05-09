@@ -52,7 +52,12 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       cookieSameSite: env.cookieSameSite,
       nodeEnv: env.nodeEnv,
       trustProxy: env.trustProxy,
-      scopes: { broadcaster: [...TWITCH_BROADCASTER_SCOPES], botAccount: [...TWITCH_BOT_ACCOUNT_SCOPES] }
+      scopes: { broadcaster: [...TWITCH_BROADCASTER_SCOPES], botAccount: [...TWITCH_BOT_ACCOUNT_SCOPES] },
+      platformBotOAuth: {
+        startPath: '/api/admin/twitch/platform-bot/start',
+        callbackPath: '/api/auth/twitch/platform-bot/callback',
+        redirectUri: `${env.publicApiUrl}/auth/twitch/platform-bot/callback`
+      }
     };
   });
 
