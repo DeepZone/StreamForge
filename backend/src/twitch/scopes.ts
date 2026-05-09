@@ -8,7 +8,10 @@ export const TWITCH_BROADCASTER_SCOPES = [
   // Needed to read current chatters via Helix chatters endpoint.
   'moderator:read:chatters',
   // Needed for manual moderation actions (timeout/ban/unban) via Helix moderation bans endpoint.
-  'moderator:manage:banned_users'
+  'moderator:manage:banned_users',
+  'channel:manage:vips',
+  'channel:read:vips',
+  'channel:manage:moderators'
 ] as const;
 
 export const TWITCH_BOT_ACCOUNT_SCOPES = [

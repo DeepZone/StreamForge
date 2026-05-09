@@ -8,13 +8,15 @@ export class TwitchApiError extends Error {
   status: number;
   context: string;
   safeMessage: string;
+  twitchError?: any;
 
-  constructor(context: string, status: number, safeMessage: string) {
+  constructor(context: string, status: number, safeMessage: string, twitchError?: any) {
     super(safeMessage);
     this.name = 'TwitchApiError';
     this.status = status;
     this.context = context;
     this.safeMessage = safeMessage;
+    this.twitchError = twitchError;
   }
 }
 
@@ -27,7 +29,7 @@ export class TwitchApi {
     }
     if (!res.ok) {
       const safeMessage = typeof body?.message === 'string' ? body.message : (typeof body?.error_description === 'string' ? body.error_description : (typeof body?.error === 'string' ? body.error : `twitch_${context}_failed`));
-      throw new TwitchApiError(context, res.status, safeMessage);
+      throw new TwitchApiError(context, res.status, safeMessage, body);
     }
     return body as T;
   }
@@ -129,6 +131,64 @@ export class TwitchApi {
     url.searchParams.set('user_id', params.userId);
     const res = await fetch(url.toString(), { method: 'DELETE', headers: this.baseHeaders(params.accessToken) });
     if (!res.ok && res.status !== 204) await this.parseResponse(res, 'unban_user');
+    return { ok: true };
+  }
+
+  async getChannelModerators(params: { broadcasterId: string; accessToken: string; userId?: string; first?: number; after?: string }) {
+    const first = Math.min(Math.max(params.first ?? 100, 1), 100);
+    const url = new URL('https://api.twitch.tv/helix/moderation/moderators');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('first', String(first));
+    if (params.userId) url.searchParams.set('user_id', params.userId);
+    if (params.after) url.searchParams.set('after', params.after);
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    return this.parseResponse<{ data: Array<{ user_id: string; user_login: string; user_name: string }>; pagination?: { cursor?: string } }>(res, 'get_channel_moderators');
+  }
+
+  async addChannelModerator(params: { broadcasterId: string; userId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/moderation/moderators');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('user_id', params.userId);
+    const res = await fetch(url.toString(), { method: 'POST', headers: this.baseHeaders(params.accessToken) });
+    if (!res.ok && res.status !== 204) await this.parseResponse(res, 'add_channel_moderator');
+    return { ok: true };
+  }
+
+  async removeChannelModerator(params: { broadcasterId: string; userId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/moderation/moderators');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('user_id', params.userId);
+    const res = await fetch(url.toString(), { method: 'DELETE', headers: this.baseHeaders(params.accessToken) });
+    if (!res.ok && res.status !== 204) await this.parseResponse(res, 'remove_channel_moderator');
+    return { ok: true };
+  }
+
+  async getChannelVips(params: { broadcasterId: string; accessToken: string; userId?: string; first?: number; after?: string }) {
+    const first = Math.min(Math.max(params.first ?? 100, 1), 100);
+    const url = new URL('https://api.twitch.tv/helix/channels/vips');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('first', String(first));
+    if (params.userId) url.searchParams.set('user_id', params.userId);
+    if (params.after) url.searchParams.set('after', params.after);
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    return this.parseResponse<{ data: Array<{ user_id: string; user_login: string; user_name: string }>; pagination?: { cursor?: string } }>(res, 'get_channel_vips');
+  }
+
+  async addChannelVip(params: { broadcasterId: string; userId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/channels/vips');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('user_id', params.userId);
+    const res = await fetch(url.toString(), { method: 'POST', headers: this.baseHeaders(params.accessToken) });
+    if (!res.ok && res.status !== 204) await this.parseResponse(res, 'add_channel_vip');
+    return { ok: true };
+  }
+
+  async removeChannelVip(params: { broadcasterId: string; userId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/channels/vips');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('user_id', params.userId);
+    const res = await fetch(url.toString(), { method: 'DELETE', headers: this.baseHeaders(params.accessToken) });
+    if (!res.ok && res.status !== 204) await this.parseResponse(res, 'remove_channel_vip');
     return { ok: true };
   }
 
