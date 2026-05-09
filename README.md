@@ -665,3 +665,25 @@ Danach `prisma db push` ausführen, damit der Unique Constraint sauber greift.
 
 - Viewernamen werden farblich unterschiedlich dargestellt.
 - Der Nachrichtentext bleibt einheitlich (gleiche Textfarbe für alle Nachrichten).
+
+## LiveChat SSE hinter Reverse Proxy (Nginx/NPM)
+
+Damit LiveChat-Events ohne Reload sofort erscheinen, muss SSE für `/api/channels/:channelId/live/chat/stream` ungepuffert durchgereicht werden.
+
+Empfohlene Proxy-Settings für `/api`:
+
+```nginx
+proxy_buffering off;
+proxy_cache off;
+proxy_read_timeout 3600s;
+proxy_send_timeout 3600s;
+chunked_transfer_encoding off;
+```
+
+Zusätzlich sollte der Backend-Response-Header gesetzt sein:
+
+```http
+X-Accel-Buffering: no
+```
+
+Hinweis zur Diagnose: Wenn LiveChat dauerhaft `reconnecting` zeigt und `liveStream.subscribers=0` bleibt, blockiert typischerweise Auth, Route oder Reverse Proxy die SSE-Verbindung.

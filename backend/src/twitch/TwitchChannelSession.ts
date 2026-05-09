@@ -148,17 +148,26 @@ export class TwitchChannelSession {
       const prefix = settings?.commandPrefix ?? '!';
       const messageText = String(evt.message?.text ?? '');
       const isCommand = messageText.trimStart().startsWith(prefix);
-      eventBus.publish(this.channelId, {
-      type: isCommand ? 'chat.command' : 'chat.message',
-      channelId: this.channelId,
-      messageId: saved.id,
-      userId: evt.chatter_user_id,
-      username: evt.chatter_user_login,
-      message: evt.message?.text ?? '',
-      isCommand,
-      createdAt: saved.createdAt.toISOString()
-    });
-      await this.logEvent('live_chat_event_published', { storedMessageId: saved.id, type: isCommand ? 'chat.command' : 'chat.message' });
+      const liveEvent = {
+        type: 'chat.message',
+        message: {
+          id: saved.id,
+          externalMessageId: evt.message_id ?? null,
+          username: evt.chatter_user_login,
+          displayName: evt.chatter_user_name ?? evt.chatter_user_login,
+          twitchUserId: evt.chatter_user_id,
+          message: messageText,
+          isCommand,
+          createdAt: saved.createdAt.toISOString()
+        }
+      };
+      await this.logEvent('live_chat_event_publish_begin', { storedMessageId: saved.id, externalMessageId: evt.message_id ?? null });
+      try {
+        eventBus.publish(this.channelId, liveEvent);
+        await this.logEvent('live_chat_event_published', { storedMessageId: saved.id, externalMessageId: evt.message_id ?? null, subscriberCount: eventBus.getChannelStats(this.channelId).subscribers });
+      } catch (publishError: any) {
+        await this.logEvent('live_chat_event_publish_failed', { storedMessageId: saved.id, externalMessageId: evt.message_id ?? null, error: publishError?.message ?? 'unknown_publish_error' });
+      }
       if (isCommand) await this.logEvent('command_detected', { messageId: evt.message_id ?? null, prefix });
       const response = await this.botCore.handleMessage({ platform: 'twitch', channelId: this.channelId, externalMessageId: evt.message_id, userId: evt.chatter_user_id, username: evt.chatter_user_login, content: evt.message?.text ?? '', isMod: evt.chatter_is_moderator, isBroadcaster: evt.chatter_is_broadcaster }, new TenantContext(this.channelId, 'twitch'));
       if (response?.content) {
