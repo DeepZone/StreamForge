@@ -564,3 +564,26 @@ Fehlerdiagnose:
 - `twitch.platform_bot.channel_token_missing`: Streamer muss Twitch OAuth durchführen.
 - `twitch.platform_bot.not_configured`: Betreiber muss Plattform-Bot verbinden.
 - `twitch.platform_bot.api_failed`: Twitch API Antwort und Request-ID in Logs prüfen.
+
+## Plattform-Bot Status
+
+- Ein vorhandener Plattform-Bot bedeutet **nicht**, dass er im Channel bereits als Moderator eingerichtet ist.
+- Der Moderatorstatus muss live über Twitch geprüft werden.
+- Nur `verified_moderator` bedeutet "bereit".
+- Bei `unknown`, `scope_missing`, `api_failed` oder `check_failed` darf StreamForge nicht als "bereit" anzeigen.
+
+## Fehlerdiagnose Twitch Livechat
+
+Wenn neue Chatnachrichten nicht erscheinen:
+
+1. Admin Health prüfen.
+2. Channel Debug prüfen: `GET /api/channels/:channelId/twitch/debug`
+3. Folgendes kontrollieren:
+   - EventSub enabled
+   - Session connected
+   - subscribed
+   - lastMessageAt
+   - ChatMessages gespeichert
+   - Live-Stream/SSE verbunden
+
+Wenn `scope_missing` angezeigt wird, Twitch-Kanal erneut verbinden, damit `channel:manage:moderators` im Broadcaster-Token enthalten ist.
