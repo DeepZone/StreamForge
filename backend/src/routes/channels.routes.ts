@@ -76,14 +76,44 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
     const { channelId } = req.params as { channelId: string };
     rep.raw.setHeader('Content-Type', 'text/event-stream');
-    rep.raw.setHeader('Cache-Control', 'no-cache');
+    rep.raw.setHeader('Cache-Control', 'no-cache, no-transform');
     rep.raw.setHeader('Connection', 'keep-alive');
+    rep.raw.setHeader('X-Accel-Buffering', 'no');
     rep.hijack();
-    const send = (event: any) => { rep.raw.write(`data: ${JSON.stringify(event)}\n\n`); };
-    const handler = (event: any) => send(event);
+
+    const writeEvent = (name: string, event: Record<string, unknown>) => {
+      rep.raw.write(`event: ${name}\n`);
+      rep.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    const safeWriteEvent = (name: string, event: Record<string, unknown>) => {
+      try {
+        writeEvent(name, event);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    safeWriteEvent('system.connected', { type: 'system.connected', channelId, createdAt: new Date().toISOString() });
+    const handler = (event: any) => {
+      if (!safeWriteEvent(event?.type === 'chat.message' ? 'chat.message' : 'message', event)) {
+        cleanup();
+      }
+    };
+    const cleanup = () => {
+      clearInterval(keepalive);
+      eventBus.unsubscribe(channelId, handler);
+      app.log.info({ event: 'live_chat_sse_disconnected', channelId, subscriberCount: eventBus.getChannelStats(channelId).subscribers }, 'live chat sse disconnected');
+      if (!rep.raw.writableEnded) rep.raw.end();
+    };
     eventBus.subscribe(channelId, handler);
-    const keepalive = setInterval(() => send({ type: 'system.keepalive', channelId, createdAt: new Date().toISOString() }), 25000);
-    req.raw.on('close', () => { clearInterval(keepalive); eventBus.unsubscribe(channelId, handler); rep.raw.end(); });
+    app.log.info({ event: 'live_chat_sse_connected', channelId, subscriberCount: eventBus.getChannelStats(channelId).subscribers }, 'live chat sse connected');
+
+    const keepalive = setInterval(() => {
+      if (!safeWriteEvent('ping', { type: 'ping', createdAt: new Date().toISOString() })) cleanup();
+    }, 20000);
+    req.raw.on('close', cleanup);
   });
   app.post('/api/channels/:channelId/live/chat/send', { preHandler: requireAuth }, async (req: any, rep) => {
     await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
