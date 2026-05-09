@@ -38,7 +38,7 @@ export class TwitchChannelSession {
     try {
       this.accessToken = decryptSecret(token.accessTokenEncrypted);
       refreshToken = decryptSecret(token.refreshTokenEncrypted);
-    } catch {
+      } catch {
       throw new Error('token_decrypt_failed');
     }
 
@@ -58,7 +58,7 @@ export class TwitchChannelSession {
         }
       });
       await this.logEvent('token_refresh_success', { expiresIn: refreshed.expires_in });
-    } catch (e: any) {
+      } catch (e: any) {
       this.status = 'token_error';
       this.lastError = e?.message ?? 'token_refresh_failed';
       await this.logEvent('token_refresh_failed', { error: this.lastError, status: e?.status ?? null });
@@ -78,7 +78,7 @@ export class TwitchChannelSession {
       this.status = 'connected';
       this.lastConnectedAt = new Date().toISOString();
       await this.logEvent('session_start', { twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin });
-    } catch (e: any) {
+      } catch (e: any) {
       this.lastError = e?.message ?? 'init_failed';
       if (this.lastError === 'auth_required') this.status = 'auth_required';
       else if (this.lastError !== 'token_refresh_failed') this.status = 'error';
@@ -97,7 +97,7 @@ export class TwitchChannelSession {
       this.subscriptionsCount += 1;
       this.lastSubscriptionAt = new Date().toISOString();
       await this.logEvent('eventsub_subscription_created', { sessionId, subscriptionsCount: this.subscriptionsCount });
-    } catch (e: any) {
+      } catch (e: any) {
       this.status = e?.message?.includes('token') ? 'token_error' : 'error';
       this.lastError = e?.message ?? 'subscription_failed';
       await this.logEvent('eventsub_subscription_failed', { error: this.lastError, status: e?.status ?? null });
@@ -123,12 +123,17 @@ export class TwitchChannelSession {
   }
 
   async handleNotification(payload: any) {
-    const evt = payload?.event;
+    const requestId = payload?.metadata?.message_id ?? null;
+    try {
+      const evt = payload?.event;
     if (!evt || evt.broadcaster_user_id !== this.channelTwitchId) return;
-    this.lastMessageAt = new Date().toISOString();
-    const saved = await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
-    const isCommand = String(evt.message?.text ?? '').trimStart().startsWith('!');
-    eventBus.publish(this.channelId, {
+      this.lastMessageAt = new Date().toISOString();
+      await this.logEvent('eventsub_chat_message_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
+      const saved = await recordChatMessage(this.channelId, Platform.twitch, evt.message_id ?? null, evt.chatter_user_id, evt.chatter_user_login, evt.message?.text ?? '');
+      await this.logEvent('chat_message_saved', { storedMessageId: saved.id, messageId: evt.message_id ?? null });
+      await this.logEvent('community_user_updated', { userId: evt.chatter_user_id });
+      const isCommand = String(evt.message?.text ?? '').trimStart().startsWith('!');
+      eventBus.publish(this.channelId, {
       type: isCommand ? 'chat.command' : 'chat.message',
       channelId: this.channelId,
       messageId: saved.id,
@@ -138,19 +143,24 @@ export class TwitchChannelSession {
       isCommand,
       createdAt: saved.createdAt.toISOString()
     });
-    await this.logEvent('chat_message_received', { messageId: evt.message_id ?? null, userId: evt.chatter_user_id });
-    const response = await this.botCore.handleMessage({ platform: 'twitch', channelId: this.channelId, externalMessageId: evt.message_id, userId: evt.chatter_user_id, username: evt.chatter_user_login, content: evt.message?.text ?? '', isMod: evt.chatter_is_moderator, isBroadcaster: evt.chatter_is_broadcaster }, new TenantContext(this.channelId, 'twitch'));
-    if (response?.content) {
+      await this.logEvent('live_chat_event_published', { storedMessageId: saved.id, type: isCommand ? 'chat.command' : 'chat.message' });
+      const response = await this.botCore.handleMessage({ platform: 'twitch', channelId: this.channelId, externalMessageId: evt.message_id, userId: evt.chatter_user_id, username: evt.chatter_user_login, content: evt.message?.text ?? '', isMod: evt.chatter_is_moderator, isBroadcaster: evt.chatter_is_broadcaster }, new TenantContext(this.channelId, 'twitch'));
+      if (response?.content) {
       try {
         const sendAuth = await resolveChatSendAuth(this.channelId);
         if (!sendAuth.accessToken) throw new Error(`chat_send_token_${sendAuth.botTokenStatus}`);
         await this.api.sendChatMessage({ broadcasterId: sendAuth.broadcasterId, senderId: sendAuth.senderId, accessToken: sendAuth.accessToken, message: response.content });
         await this.logEvent('command_executed', { messageId: evt.message_id ?? null });
-      } catch (e: any) {
+        } catch (e: any) {
         this.lastError = e?.message ?? 'command_failed';
-        await this.logEvent('command_failed', { messageId: evt.message_id ?? null, error: this.lastError });
+        await this.logEvent('command_failed', { messageId: evt.message_id ?? null, error: this.lastError, requestId });
       }
     }
+    } catch (e: any) {
+    this.lastError = e?.message ?? 'eventsub_chat_message_failed';
+    await this.logEvent('eventsub_chat_message_failed', { failedStep: 'handle_notification', requestId, channelId: this.channelId, error: this.lastError });
+    throw e;
+  }
   }
 
   getHealth() {
