@@ -488,3 +488,35 @@ Diese Redirect URLs müssen **exakt** eingetragen sein:
   - channel:manage:vips
 - Nach Scope-Änderung muss Twitch OAuth erneut durchgeführt werden.
 - Alle Rollenänderungen werden in AuditLog/BotEvent/TwitchRoleAction protokolliert.
+
+## Chatters (Rollen & Moderation)
+
+Die Seite **Chatters** zeigt aktuelle Twitch-Chatteilnehmer (mit möglicher Twitch-Verzögerung) und deren Rolle:
+- Broadcaster
+- Moderator
+- VIP
+- Viewer
+
+Pro Chatter gibt es ein **Hamburger-/Drei-Punkte-Menü** mit manuellen Aktionen:
+- Moderator hinzufügen/entfernen
+- VIP hinzufügen/entfernen
+- Timeout
+- Ban
+- Unban / Timeout entfernen
+
+Nicht möglich über StreamForge:
+- Subscriber setzen
+- Follower setzen
+- Broadcaster ändern
+- Affiliate/Partner ändern
+
+Benötigte Scopes:
+- `moderator:read:chatters`
+- `channel:manage:moderators`
+- `channel:read:vips`
+- `channel:manage:vips`
+- `moderator:manage:banned_users`
+
+Wichtig: Nach Scope-Änderungen muss Twitch OAuth erneut durchgeführt werden, damit der gespeicherte Token die neuen Scopes enthält.
+
+Alle Rollen- und Moderationsaktionen werden in Audit- und Event-Logs protokolliert.

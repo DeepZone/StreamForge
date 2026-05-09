@@ -16,6 +16,8 @@ const roleActionSchema = z.object({
   username: z.string().max(100).optional()
 }).strict();
 const requiredRoleScopes = ['channel:manage:moderators', 'channel:read:vips', 'channel:manage:vips'] as const;
+const moderationScope = 'moderator:manage:banned_users';
+const moderationActionSchema = z.object({ action: z.enum(['timeout','ban','unban']), username: z.string().max(100).optional(), durationSeconds: z.number().int().min(1).max(1209600).optional(), reason: z.string().max(500).optional() }).strict();
 
 const channelsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/channels', { preHandler: requireAuth }, async (req) => {
@@ -114,9 +116,12 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
         const isMod = modSet.has(x.user_id);
         const isVip = vipSet.has(x.user_id);
         const role = !roleStatusAvailable ? 'unknown' : isBroadcaster ? 'broadcaster' : isMod ? 'moderator' : isVip ? 'vip' : 'viewer';
-        return { userId: x.user_id, userLogin: x.user_login, userName: x.user_name, role, roleCapabilities: { canMakeModerator: roleStatusAvailable && !isBroadcaster && !isMod, canRemoveModerator: roleStatusAvailable && !isBroadcaster && isMod, canMakeVip: roleStatusAvailable && !isBroadcaster && !isVip && !isMod, canRemoveVip: roleStatusAvailable && !isBroadcaster && isVip }, firstSeenAt: cMap.get(x.user_id)?.firstSeenAt ?? null, lastSeenAt: cMap.get(x.user_id)?.lastSeenAt ?? null, messageCount: cMap.get(x.user_id)?.messageCount ?? 0, commandCount: cMap.get(x.user_id)?.commandCount ?? 0 };
+        const moderationStatus = { isBanned: false, isTimedOut: false, banExpiresAt: null as string | null, banReason: null as string | null };
+        const moderationCapabilities = isBroadcaster ? { canTimeout: false, canBan: false, canUnban: false } : { canTimeout: true, canBan: true, canUnban: false };
+        return { userId: x.user_id, userLogin: x.user_login, userName: x.user_name, role, roleCapabilities: { canMakeModerator: roleStatusAvailable && !isBroadcaster && !isMod, canRemoveModerator: roleStatusAvailable && !isBroadcaster && isMod, canMakeVip: roleStatusAvailable && !isBroadcaster && !isVip && !isMod, canRemoveVip: roleStatusAvailable && !isBroadcaster && isVip }, moderationStatus, moderationCapabilities, firstSeenAt: cMap.get(x.user_id)?.firstSeenAt ?? null, lastSeenAt: cMap.get(x.user_id)?.lastSeenAt ?? null, messageCount: cMap.get(x.user_id)?.messageCount ?? 0, commandCount: cMap.get(x.user_id)?.commandCount ?? 0 };
       });
-      return { total: result.total ?? result.data.length, updatedAt: new Date().toISOString(), note: 'Twitch aktualisiert die Chatters-Liste verzögert.', roleStatusAvailable, missingScopes, items };
+      const moderationStatusAvailable = scopes.includes(moderationScope);
+      return { total: result.total ?? result.data.length, updatedAt: new Date().toISOString(), note: 'Twitch aktualisiert die Chatters-Liste verzögert.', roleStatusAvailable, missingScopes, moderationStatusAvailable, items };
     } catch (e: any) {
       if (e instanceof TwitchApiError && e.status === 403) return rep.code(400).send({ errorCode: 'twitch.chatters.missing_scope', detail: 'Bitte Twitch neu verbinden.' });
       return rep.code(502).send({ errorCode: 'twitch.chatters.fetch_failed' });
@@ -171,6 +176,37 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     return { items };
   });
 
+
+
+  app.post('/api/channels/:channelId/twitch/chatters/:userId/moderation', { preHandler: requireAuth }, async (req: any, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
+    const body = moderationActionSchema.safeParse(req.body);
+    if (!body.success) return rep.code(400).send({ errorCode: 'validation.failed', details: body.error.issues });
+    if (body.data.action === 'timeout' && !body.data.durationSeconds) return rep.code(400).send({ errorCode: 'validation.failed', details: [{ message: 'durationSeconds required for timeout' }] });
+    const { channelId, userId } = req.params as { channelId: string; userId: string };
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
+    if (userId === channel.twitchChannelId) return rep.code(409).send({ errorCode: 'twitch.moderation.cannot_modify_broadcaster' });
+    const token = await prisma.twitchToken.findUnique({ where: { channelId } });
+    if (!token) return rep.code(400).send({ errorCode: 'twitch.moderation.auth_required' });
+    let accessToken=''; let refreshToken=''; let scopes:string[]=[];
+    try { accessToken = decryptSecret(token.accessTokenEncrypted); refreshToken = decryptSecret(token.refreshTokenEncrypted); scopes = JSON.parse(token.scopesJson || '[]'); } catch { return rep.code(400).send({ errorCode: 'twitch.moderation.auth_required' }); }
+    if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) { try { const refreshed = await twitchApi.refreshAccessToken(refreshToken); accessToken = refreshed.access_token; scopes = refreshed.scope ?? scopes; await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } }); } catch { return rep.code(400).send({ errorCode: 'twitch.moderation.auth_required' }); } }
+    if (!scopes.includes(moderationScope)) return rep.code(400).send({ errorCode: 'twitch.moderation.scope_missing', hint: 'Bitte Twitch erneut verbinden, damit StreamForge diese Aktion ausführen darf.' });
+    try {
+      if (body.data.action === 'timeout') await twitchApi.timeoutUser({ broadcasterId: channel.twitchChannelId, moderatorId: channel.twitchChannelId, userId, durationSeconds: body.data.durationSeconds!, reason: body.data.reason, accessToken });
+      if (body.data.action === 'ban') await twitchApi.banUser({ broadcasterId: channel.twitchChannelId, moderatorId: channel.twitchChannelId, userId, reason: body.data.reason, accessToken });
+      if (body.data.action === 'unban') await twitchApi.unbanUser({ broadcasterId: channel.twitchChannelId, moderatorId: channel.twitchChannelId, userId, accessToken });
+    } catch (e) {
+      if (e instanceof TwitchApiError) return rep.code(502).send({ errorCode: 'twitch.moderation.api_failed', status: e.status, message: e.safeMessage });
+      return rep.code(502).send({ errorCode: 'twitch.moderation.api_failed' });
+    }
+    const community = await prisma.communityUser.findFirst({ where: { channelId, platform: Platform.twitch, externalUserId: userId } });
+    await prisma.moderationAction.create({ data: { channelId, communityUserId: community?.id, targetExternalUserId: userId, targetUsername: body.data.username, actionType: body.data.action, durationSeconds: body.data.durationSeconds, reason: body.data.reason, createdByUserId: req.session.userId } });
+    await prisma.auditLog.create({ data: { channelId, userId: req.session.userId, action: `twitch.moderation.${body.data.action}`, detailsJson: JSON.stringify({ userId, username: body.data.username || null, durationSeconds: body.data.durationSeconds || null }) } });
+    await prisma.botEvent.create({ data: { channelId, platform: Platform.twitch, eventType: 'twitch.moderation.changed', payloadJson: JSON.stringify({ action: body.data.action, userId, username: body.data.username || null, durationSeconds: body.data.durationSeconds || null }) } });
+    return { ok: true, action: body.data.action, userId, username: body.data.username || null, durationSeconds: body.data.durationSeconds ?? null };
+  });
 
 
   app.get('/api/channels/:channelId/twitch/bot', { preHandler: requireAuth }, async (req, rep) => {
