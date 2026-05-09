@@ -596,3 +596,20 @@ Wenn `scope_missing` angezeigt wird, Twitch-Kanal erneut verbinden, damit `chann
 - Livechat prüfen: `/dashboard/channels/:channelId/livechat` öffnen, SSE-Status beobachten und Historie neu laden.
 - Plattform-Bot prüfen: in Integrationen `Moderatorstatus prüfen` ausführen.
 - Nach Scope-Änderungen muss Twitch OAuth neu verbunden werden (z. B. `moderator:manage:banned_users`, `channel:manage:moderators`, `channel:manage:vips`, `channel:read:vips`).
+
+## EventSub Recovery Test
+
+1. Backend starten.
+2. AdminHealth prüfen:
+   - `eventSubConnected=true`
+   - Channel `subscribed=true`
+3. Im Twitch Chat schreiben: `test`
+4. Erwartung in BotEvents:
+   - `eventsub_chat_message_received`
+   - `chat_message_saved`
+   - `live_chat_event_published`
+5. Backend restart: `docker compose restart backend`
+6. Nach Restart: AdminHealth muss wieder `subscribed=true` zeigen.
+7. Wieder im Twitch Chat schreiben.
+8. Livechat muss aktualisieren.
+9. Command `!ping` (oder Channel-Prefix) testen.
