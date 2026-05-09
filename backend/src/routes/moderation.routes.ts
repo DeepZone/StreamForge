@@ -43,6 +43,51 @@ const moderationRoutes: FastifyPluginAsync = async (app) => {
     return executeModeration(req as AuthedRequest, rep, 'unban', body.data as any);
   });
 
+  app.get('/api/channels/:channelId/moderation/restricted-users', { preHandler: requireAuth }, async (req, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, allowedRole);
+    const { channelId } = req.params as { channelId: string };
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
+    const token = await prisma.twitchToken.findUnique({ where: { channelId } });
+    if (!token) return rep.code(400).send({ errorCode: 'twitch.moderation.auth_required', hint: 'Twitch erneut verbinden.' });
+    let accessToken = '';
+    let refreshToken = '';
+    let scopes: string[] = [];
+    try {
+      accessToken = decryptSecret(token.accessTokenEncrypted);
+      refreshToken = decryptSecret(token.refreshTokenEncrypted);
+      scopes = JSON.parse(token.scopesJson || '[]');
+    } catch {
+      return rep.code(400).send({ errorCode: 'twitch.moderation.auth_required', hint: 'Twitch erneut verbinden.' });
+    }
+    if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) {
+      try {
+        const refreshed = await twitchApi.refreshAccessToken(refreshToken);
+        accessToken = refreshed.access_token;
+        scopes = refreshed.scope ?? scopes;
+        await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } });
+      } catch {
+        return rep.code(400).send({ errorCode: 'twitch.moderation.auth_required', hint: 'Twitch erneut verbinden.' });
+      }
+    }
+    if (!hasRequiredBroadcasterScopes(scopes) || !scopes.includes('moderator:manage:banned_users')) return rep.code(400).send({ errorCode: 'twitch.moderation.scope_missing', hint: 'Twitch erneut verbinden, damit moderator:manage:banned_users verfügbar ist.' });
+
+    const bannedUsers: Array<{ userId: string; username: string; expiresAt: string | null; reason: string }> = [];
+    let after: string | undefined;
+    try {
+      do {
+        const page = await twitchApi.getBannedUsers({ broadcasterId: channel.twitchChannelId, moderatorId: channel.twitchChannelId, accessToken, first: 100, after });
+        page.data.forEach((entry) => bannedUsers.push({ userId: entry.user_id, username: entry.user_name || entry.user_login || entry.user_id, expiresAt: entry.expires_at, reason: entry.reason || '' }));
+        after = page.pagination?.cursor;
+      } while (after && bannedUsers.length < 1000);
+    } catch (e: any) {
+      if (e instanceof TwitchApiError) return rep.code(502).send({ errorCode: 'twitch.moderation.api_failed', status: e.status, message: e.safeMessage });
+      return rep.code(502).send({ errorCode: 'twitch.moderation.api_failed' });
+    }
+
+    return { users: bannedUsers };
+  });
+
   app.get('/api/channels/:channelId/moderation/actions', { preHandler: requireAuth }, async (req, rep) => {
     await requireChannelRole(req as AuthedRequest, rep, allowedRole);
     const { channelId } = req.params as { channelId: string };
