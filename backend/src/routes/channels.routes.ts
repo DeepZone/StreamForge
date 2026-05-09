@@ -247,7 +247,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/api/channels/:channelId/twitch/bot/check', { preHandler: requireAuth }, async (req, rep) => {
-    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     const bot = await prisma.platformTwitchBot.findFirst({ where: { isActive: true }, orderBy: { updatedAt: 'desc' } });
@@ -262,7 +262,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
       tokenScopes: [] as string[],
       requiredScopes: [platformBotModeratorScope]
     };
-    const problem = (errorCode: string, status: number, detail: string, extra?: Record<string, unknown>) => rep.code(status).send({ errorCode, status, detail, requestId: req.id, debug: { ...debug, ...(extra || {}) } });
+    const problem = (errorCode: string, status: number, detail: string, extra?: Record<string, unknown>) => rep.code(status).send({ errorCode, status, detail, requestId: req.id, ...extra });
 
     if (!channel) return problem('channel.not_found', 404, 'Channel wurde nicht gefunden.');
     if (!bot) return problem('twitch.platform_bot.not_configured', 400, 'Kein globaler Plattform-Bot ist konfiguriert.');
@@ -292,7 +292,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
 
     const missingScopes = [platformBotModeratorScope].filter((scope) => !scopes.includes(scope));
     if (missingScopes.length) {
-      return problem('twitch.platform_bot.scope_missing', 400, 'Dem Twitch-Token fehlt die Berechtigung, Moderatorstatus zu prüfen.', { missingScopes });
+      return problem('twitch.platform_bot.scope_missing', 400, 'Dem Twitch-Token fehlt die Berechtigung, Moderatorstatus zu prüfen.', { missingScopes, hint: 'Bitte Twitch-Kanal erneut verbinden.' });
     }
 
     try {
@@ -300,10 +300,43 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
       const isModerator = mods.data.length > 0;
       const checkedAt = new Date();
       await prisma.channelBotStatus.upsert({ where: { channelId }, create: { channelId, platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt, lastError: isModerator ? null : 'not_moderator' }, update: { platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt, lastError: isModerator ? null : 'not_moderator' } });
-      return { isModerator, botLogin: bot.twitchLogin, instruction: `/mod ${bot.twitchLogin}`, checkedAt: checkedAt.toISOString() };
+      return { platformBotConnected: true, botLogin: bot.twitchLogin, botDisplayName: bot.displayName, isModerator, checkedAt: checkedAt.toISOString(), instruction: `/mod ${bot.twitchLogin}`, canAutoAddModerator: missingScopes.length === 0, missingScopes: [] };
     } catch (e: any) {
       if (e instanceof TwitchApiError) return problem('twitch.platform_bot.api_failed', 502, 'Twitch API Fehler beim Abruf der Moderatorliste.', { twitchStatus: e.status, twitchSafeMessage: e.safeMessage });
       return problem('twitch.platform_bot.check_failed', 500, 'Unerwarteter Fehler bei der Moderatorstatus-Prüfung.');
+    }
+  });
+
+  app.post('/api/channels/:channelId/twitch/bot/add-moderator', { preHandler: requireAuth }, async (req, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
+    const { channelId } = req.params as { channelId: string };
+    const role = (req as AuthedRequest).session.channelRoles[channelId] || (req as AuthedRequest).session.role;
+    if (role === 'channel_moderator') return rep.code(403).send({ errorCode: 'permission.denied' });
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    const bot = await prisma.platformTwitchBot.findFirst({ where: { isActive: true }, orderBy: { updatedAt: 'desc' } });
+    const token = await prisma.twitchToken.findUnique({ where: { channelId } });
+    if (!channel) return rep.code(404).send({ errorCode: 'channel.not_found' });
+    if (!bot) return rep.code(400).send({ errorCode: 'twitch.platform_bot.not_configured' });
+    if (!token) return rep.code(400).send({ errorCode: 'twitch.platform_bot.channel_token_missing' });
+    let accessToken = ''; let refreshToken = ''; let scopes: string[] = [];
+    try { accessToken = decryptSecret(token.accessTokenEncrypted); refreshToken = decryptSecret(token.refreshTokenEncrypted); scopes = JSON.parse(token.scopesJson || '[]'); } catch { return rep.code(400).send({ errorCode: 'twitch.platform_bot.channel_token_missing' }); }
+    if (token.expiresAt.getTime() <= Date.now() + 5 * 60 * 1000) {
+      try { const refreshed = await twitchApi.refreshAccessToken(refreshToken); accessToken = refreshed.access_token; scopes = refreshed.scope ?? scopes; await prisma.twitchToken.update({ where: { channelId }, data: { accessTokenEncrypted: encryptSecret(refreshed.access_token), refreshTokenEncrypted: encryptSecret(refreshed.refresh_token || refreshToken), expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopesJson: JSON.stringify(scopes) } }); } catch { return rep.code(400).send({ errorCode: 'twitch.platform_bot.channel_token_missing' }); }
+    }
+    const missingScopes = [platformBotModeratorScope].filter((scope) => !scopes.includes(scope));
+    if (missingScopes.length) return rep.code(400).send({ errorCode: 'twitch.platform_bot.scope_missing', missingScopes, hint: 'Bitte Twitch-Kanal erneut verbinden.' });
+    try {
+      try { await twitchApi.addChannelModerator({ broadcasterId: channel.twitchChannelId, userId: bot.twitchUserId, accessToken }); } catch (e: any) { if (!(e instanceof TwitchApiError) || e.status !== 409) throw e; }
+      const mods = await twitchApi.getChannelModerators({ broadcasterId: channel.twitchChannelId, accessToken, userId: bot.twitchUserId, first: 1 });
+      const isModerator = mods.data.length > 0;
+      const checkedAt = new Date();
+      await prisma.channelBotStatus.upsert({ where: { channelId }, create: { channelId, platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt, lastError: isModerator ? null : 'not_moderator' }, update: { platformBotId: bot.id, status: isModerator ? 'ready' : 'not_moderator', isModerator, lastCheckedAt: checkedAt, lastError: isModerator ? null : 'not_moderator' } });
+      await prisma.auditLog.create({ data: { channelId, userId: (req as AuthedRequest).session.id, action: 'twitch.platform_bot.add_moderator', detailsJson: JSON.stringify({ botLogin: bot.twitchLogin, botTwitchUserId: bot.twitchUserId, isModerator }) } });
+      await prisma.botEvent.create({ data: { channelId, platform: Platform.twitch, eventType: 'platform_bot_added_as_moderator', payloadJson: JSON.stringify({ botLogin: bot.twitchLogin, botTwitchUserId: bot.twitchUserId, isModerator }) } });
+      return { ok: true, botLogin: bot.twitchLogin, isModerator, checkedAt: checkedAt.toISOString(), instruction: `/mod ${bot.twitchLogin}` };
+    } catch (e: any) {
+      if (e instanceof TwitchApiError) return rep.code(502).send({ errorCode: 'twitch.platform_bot.add_moderator_failed', status: e.status, safeMessage: e.safeMessage });
+      return rep.code(502).send({ errorCode: 'twitch.platform_bot.add_moderator_failed' });
     }
   });
 };
