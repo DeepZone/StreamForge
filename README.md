@@ -540,3 +540,17 @@ Unter `/dashboard/channels/:channelId/settings`:
 - `language` (`de`/`en`)
 - `timezone`
 
+
+## Plattform-Bot Moderatorstatus prüfen
+
+Ablauf:
+1. Plattform-Bot global im Adminbereich verbinden.
+2. Streamer-Channel per Twitch OAuth verbinden.
+3. Im Twitch-Chat ausführen: `/mod BOTLOGIN`.
+4. In StreamForge unter Integrationen: **Moderatorstatus prüfen**.
+
+Fehlerdiagnose:
+- `twitch.platform_bot.scope_missing`: Channel erneut per Twitch verbinden.
+- `twitch.platform_bot.channel_token_missing`: Streamer muss Twitch OAuth durchführen.
+- `twitch.platform_bot.not_configured`: Betreiber muss Plattform-Bot verbinden.
+- `twitch.platform_bot.api_failed`: Twitch API Antwort und Request-ID in Logs prüfen.
