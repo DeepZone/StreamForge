@@ -652,3 +652,16 @@ where c."channelId" = d."channelId"
 ```
 
 Danach `prisma db push` ausführen, damit der Unique Constraint sauber greift.
+
+## LiveChat senden als Streamer
+
+- Manuelle Nachrichten aus dem Dashboard-LiveChat werden immer als Broadcaster/Streamer gesendet (nicht als Plattform-Bot).
+- Bot-/Command-Antworten laufen weiterhin unverändert über die bestehende Plattform-Bot-Logik.
+- Benötigter Broadcaster-Scope: `user:write:chat`.
+- Nach Scope-Änderung muss der Twitch-Kanal erneut verbunden werden, damit das Token den neuen Scope enthält.
+- Erfolgreich gesendete Nachrichten werden nicht lokal „gefaked“, sondern erscheinen erst nach Twitch EventSub-Zustellung im LiveChat (vermeidet Duplikate).
+
+## LiveChat Darstellung
+
+- Viewernamen werden farblich unterschiedlich dargestellt.
+- Der Nachrichtentext bleibt einheitlich (gleiche Textfarbe für alle Nachrichten).

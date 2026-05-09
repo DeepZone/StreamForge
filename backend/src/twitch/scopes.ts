@@ -3,6 +3,8 @@ export const TWITCH_BROADCASTER_SCOPES = [
   'user:read:email',
   // Needed for receiving Twitch chat messages in this MVP EventSub flow.
   'user:read:chat',
+  // Needed for manually sending LiveChat messages as broadcaster/streamer.
+  'user:write:chat',
   // Bot permission scope used by EventSub chat subscriptions for broadcaster context.
   'channel:bot',
   // Needed to read current chatters via Helix chatters endpoint.
