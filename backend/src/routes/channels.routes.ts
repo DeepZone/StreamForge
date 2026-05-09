@@ -108,6 +108,30 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
   });
 
 
+  app.get('/api/channels/:channelId/chatters/roles', { preHandler: requireAuth }, async (req, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
+    const { channelId } = req.params as { channelId: string };
+    const members = await prisma.channelMember.findMany({ where: { channelId }, include: { user: true } });
+    const rolesByLogin = Object.fromEntries(members.filter((m) => m.user.twitchLogin).map((m) => [String(m.user.twitchLogin).toLowerCase(), m.role]));
+    return { rolesByLogin };
+  });
+
+  app.patch('/api/channels/:channelId/chatters/roles', { preHandler: requireAuth }, async (req: any, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
+    const { channelId } = req.params as { channelId: string };
+    const { userLogin, role } = req.body as { userLogin?: string; role?: Role };
+    if (!userLogin || !role || !Object.values(Role).includes(role)) return rep.code(400).send({ errorCode: 'validation.invalid_payload' });
+    const user = await prisma.user.findFirst({ where: { twitchLogin: { equals: userLogin, mode: 'insensitive' } } });
+    if (!user) return rep.code(404).send({ errorCode: 'user.not_found', detail: 'Der User hat noch keinen StreamForge-Account.' });
+    const member = await prisma.channelMember.upsert({
+      where: { channelId_userId: { channelId, userId: user.id } },
+      create: { channelId, userId: user.id, role },
+      update: { role }
+    });
+    return { member };
+  });
+
+
   app.get('/api/channels/:channelId/twitch/bot', { preHandler: requireAuth }, async (req, rep) => {
     await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
     const { channelId } = req.params as { channelId: string };
