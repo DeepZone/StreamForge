@@ -22,7 +22,8 @@ const schema = z.object({
   TWITCH_CLIENT_SECRET: z.string().default(''),
   TWITCH_REDIRECT_URI: z.string().default(''),
   TWITCH_EVENTSUB_ENABLED: z.coerce.boolean().default(false),
-  TWITCH_EVENTSUB_DEBUG: z.coerce.boolean().default(false)
+  TWITCH_EVENTSUB_DEBUG: z.coerce.boolean().default(false),
+  TWITCH_ALLOW_BROADCASTER_SEND_FALLBACK: z.coerce.boolean().optional()
 });
 
 const parsed = schema.parse(process.env);
@@ -48,7 +49,8 @@ export const env = {
   twitchRedirectUri: parsed.TWITCH_REDIRECT_URI || `${normalizedPublicApiUrl}/auth/twitch/callback`,
   tokenKey: parsed.TOKEN_ENCRYPTION_KEY,
   twitchEventSubEnabled: parsed.TWITCH_EVENTSUB_ENABLED,
-  twitchEventSubDebug: parsed.TWITCH_EVENTSUB_DEBUG
+  twitchEventSubDebug: parsed.TWITCH_EVENTSUB_DEBUG,
+  twitchAllowBroadcasterSendFallback: parsed.TWITCH_ALLOW_BROADCASTER_SEND_FALLBACK ?? (parsed.NODE_ENV === 'development')
 };
 
 export const hasTwitchOAuthConfig = () => Boolean(env.twitchClientId && env.twitchClientSecret && env.twitchRedirectUri);

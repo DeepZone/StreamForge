@@ -520,3 +520,22 @@ Benötigte Scopes:
 Wichtig: Nach Scope-Änderungen muss Twitch OAuth erneut durchgeführt werden, damit der gespeicherte Token die neuen Scopes enthält.
 
 Alle Rollen- und Moderationsaktionen werden in Audit- und Event-Logs protokolliert.
+
+## Globaler Plattform-Bot
+
+- Der Plattform-Bot ist ein zentraler Twitch-Account des Betreibers.
+- Er wird einmalig im Adminbereich unter `/admin/twitch` per OAuth verbunden.
+- Streamer verbinden nur ihren eigenen Channel per Broadcaster OAuth.
+- Um den Plattform-Bot im Channel zu aktivieren, muss der Streamer im Twitch-Chat ausführen: `/mod BOTLOGIN`.
+- Channel-Integrationen zeigen nur Status und Anleitung, kein Admin-OAuth für normale Channel-User.
+- Nur Admins (`system_owner`, `platform_admin`) können den globalen Plattform-Bot verbinden.
+- Optionaler Fallback: `TWITCH_ALLOW_BROADCASTER_SEND_FALLBACK` (empfohlen: development `true`, production `false`).
+
+## Channel Settings
+
+Unter `/dashboard/channels/:channelId/settings`:
+- `botEnabled`
+- `commandPrefix`
+- `language` (`de`/`en`)
+- `timezone`
+
