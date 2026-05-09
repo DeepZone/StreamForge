@@ -453,3 +453,21 @@ Diese Redirect URLs müssen **exakt** eingetragen sein:
 7. Command anlegen.
 8. Im Twitch Chat ausführen.
 9. Bot antwortet unter BOTLOGIN.
+
+## Twitch Moderation
+- Unterstützte Aktionen: Timeout, Ban, Unban/Untimeout über Dashboard und API.
+- Benötigter Broadcaster Scope: `moderator:manage:banned_users`.
+- Nach Scope-Änderungen muss Twitch OAuth erneut durchgeführt werden, damit der Scope im gespeicherten Token vorliegt.
+- Alle Moderationsaktionen sind manuell ausgelöst, kanalgebunden, rollenbasiert und werden in ModerationAction/BotEvent/AuditLog protokolliert.
+- Keine automatische Moderation, keine automatischen Sanktionen.
+
+## Recaps löschen
+- API: `DELETE /api/channels/:channelId/recaps/:recapId`.
+- Löschen ist kanalgebunden und nur für berechtigte Rollen vorgesehen.
+- Löschaktionen werden auditiert.
+
+## Community Radar Aufräumung
+- Topics werden heuristisch zu Clustern verdichtet (z. B. Setup, Discord, Schedule, Music, Gaming, Tech).
+- Irrelevante Einzelwörter, URLs, Mentions, Zahlenfragmente und sehr kurze Tokens werden gefiltert.
+- Anzeige nur relevanter Topics inkl. Score/Keywords/MessageCount, keine rohe Wortzähl-Liste.
+- Empfehlungen sind kompakt (max. 5) und rein heuristisch, ohne personenbezogene Bewertung.

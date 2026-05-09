@@ -46,6 +46,13 @@ export const getCommunityRadar = async (channelId: string, query: { from?: strin
 
   const questionsDetected = faq.reduce((acc, x) => acc + x.count, 0);
   const commandsUsed = commandUsage._sum.usageCount || 0;
+
+  const recommendations:string[] = [];
+  if (faq.some((x)=>/mikro|mic|setup/i.test(x.question))) recommendations.push('Lege einen !setup oder !mic Command an.');
+  if (topics.some((x:any)=>String(x.topic).toLowerCase().includes('discord'))) recommendations.push('Prüfe, ob ein !discord Command sichtbar genug ist.');
+  if (newViewers.length >= 10) recommendations.push('Begrüßungs-/Info-Command könnte sinnvoll sein.');
+  if (totalMessages < 20) recommendations.push('Stelle gezielte Fragen an den Chat oder nutze einen Timer.');
+  if (watchlist.length > 0) recommendations.push('Prüfe Moderationshistorie manuell.');
   return {
     summary: { totalMessages, uniqueChatters: users.length, newViewers: newViewers.length, returningViewers: returningViewers.length, questionsDetected, commandsUsed, engagementScore: calcEngagementScore({ uniqueChatters: users.length, totalMessages, returningViewers: returningViewers.length, questionsDetected, commandsUsed }) },
     topChatters: users.slice(0, range.limit).map((u) => ({ username: u.username, displayName: u.displayName, messageCount: u.messageCount, commandCount: u.commandCount, lastSeenAt: u.lastSeenAt })),
@@ -54,6 +61,7 @@ export const getCommunityRadar = async (channelId: string, query: { from?: strin
     topTopics: topics,
     potentialModerators,
     watchlist,
-    messagesByHour
+    messagesByHour,
+    recommendations: recommendations.slice(0,5)
   };
 };

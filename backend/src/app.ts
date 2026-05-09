@@ -12,6 +12,7 @@ import campaignsRoutes from './routes/campaigns.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import communityRoutes from './routes/community.routes.js';
 import recapsRoutes from './routes/recaps.routes.js';
+import moderationRoutes from './routes/moderation.routes.js';
 import { TWITCH_BROADCASTER_SCOPES } from './twitch/scopes.js';
 
 const app = Fastify({ trustProxy: env.trustProxy, bodyLimit: 256 * 1024, disableRequestLogging: true });
@@ -60,5 +61,5 @@ app.get('/api/public/twitch/oauth-url', async () => {
   return { authorizeUrl: url.toString(), redirectUri: env.twitchRedirectUri, scopes: [...TWITCH_BROADCASTER_SCOPES] };
 });
 
-app.register(setupRoutes); app.register(authRoutes); app.register(channelsRoutes); app.register(commandsRoutes); app.register(timersRoutes); app.register(campaignsRoutes); app.register(adminRoutes); app.register(communityRoutes); app.register(recapsRoutes);
+app.register(setupRoutes); app.register(authRoutes); app.register(channelsRoutes); app.register(commandsRoutes); app.register(timersRoutes); app.register(campaignsRoutes); app.register(adminRoutes); app.register(communityRoutes); app.register(recapsRoutes); app.register(moderationRoutes);
 export default app;

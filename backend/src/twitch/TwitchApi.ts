@@ -88,4 +88,36 @@ export class TwitchApi {
     const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
     return this.parseResponse<{ data: TwitchChatter[]; pagination?: { cursor?: string }; total?: number }>(res, 'get_chatters');
   }
+
+  async banUser(params: { broadcasterId: string; moderatorId: string; userId: string; reason?: string; accessToken: string }) {
+    const reason = params.reason?.slice(0, 500);
+    const res = await fetch('https://api.twitch.tv/helix/moderation/bans', {
+      method: 'POST',
+      headers: this.baseHeaders(params.accessToken),
+      body: JSON.stringify({ broadcaster_id: params.broadcasterId, moderator_id: params.moderatorId, data: { user_id: params.userId, ...(reason ? { reason } : {}) } })
+    });
+    return this.parseResponse(res, 'ban_user');
+  }
+
+  async timeoutUser(params: { broadcasterId: string; moderatorId: string; userId: string; durationSeconds: number; reason?: string; accessToken: string }) {
+    const duration = Math.min(1209600, Math.max(1, Math.floor(params.durationSeconds)));
+    const reason = params.reason?.slice(0, 500);
+    const res = await fetch('https://api.twitch.tv/helix/moderation/bans', {
+      method: 'POST',
+      headers: this.baseHeaders(params.accessToken),
+      body: JSON.stringify({ broadcaster_id: params.broadcasterId, moderator_id: params.moderatorId, data: { user_id: params.userId, duration, ...(reason ? { reason } : {}) } })
+    });
+    return this.parseResponse(res, 'timeout_user');
+  }
+
+  async unbanUser(params: { broadcasterId: string; moderatorId: string; userId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/moderation/bans');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('moderator_id', params.moderatorId);
+    url.searchParams.set('user_id', params.userId);
+    const res = await fetch(url.toString(), { method: 'DELETE', headers: this.baseHeaders(params.accessToken) });
+    if (!res.ok && res.status !== 204) await this.parseResponse(res, 'unban_user');
+    return { ok: true };
+  }
+
 }

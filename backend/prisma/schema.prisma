@@ -292,12 +292,15 @@ model ModerationNote {
 }
 
 model ModerationAction {
-  id              String   @id @default(cuid())
-  channelId       String
-  communityUserId String
-  actionType      String
-  reason          String?
-  createdByUserId String?
-  createdAt       DateTime @default(now())
-  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  channelId            String
+  communityUserId      String?
+  targetExternalUserId String?
+  targetUsername       String?
+  actionType           String
+  durationSeconds      Int?
+  reason               String?
+  createdByUserId      String?
+  createdAt            DateTime @default(now())
+  channel              Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
 }
