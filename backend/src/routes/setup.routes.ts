@@ -20,7 +20,7 @@ const setupRoutes: FastifyPluginAsync = async (app) => {
         const exists = await tx.user.findFirst({ where: { isLocalAdmin: true, members: { some: { role: 'system_owner' } } } });
         if (exists) return null;
         const user = await tx.user.create({ data: { email: email, passwordHash: await hashPassword(password), displayName: displayName, isLocalAdmin: true } });
-        const channel = await tx.channel.create({ data: { twitchChannelId: `sys-${user.id}`, twitchLogin: `system-${user.id.slice(-6)}`, displayName: 'System' } });
+        const channel = await tx.channel.create({ data: { twitchChannelId: `sys-${user.id}`, twitchLogin: `system-${user.id.slice(-6)}`, displayName: 'System', isActive: false, botEnabled: false } });
         await tx.channelMember.create({ data: { channelId: channel.id, userId: user.id, role: 'system_owner' } });
         return { user, channel };
       });
