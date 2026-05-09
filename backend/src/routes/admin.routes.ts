@@ -6,6 +6,7 @@ import { TWITCH_BOT_ACCOUNT_SCOPES, TWITCH_BROADCASTER_SCOPES } from '../twitch/
 import { twitchConnectionManager } from '../twitch/managerSingleton.js';
 import { audit } from '../services/auditService.js';
 import { getTimerWorkerHealth } from '../workers/timerWorker.js';
+import { prisma } from '../db/prisma.js';
 
 import crypto from 'crypto';
 import { setTwitchBotOAuthState } from '../auth/session.js';
@@ -14,7 +15,12 @@ import { setTwitchBotOAuthState } from '../auth/session.js';
 const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/health', { preHandler: requireAuth }, async (req, rep) => {
     if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
-    return { ok: true, db: 'up', backend: 'up', twitch: { eventSubEnabled: env.twitchEventSubEnabled, ...twitchConnectionManager.health() }, timerWorker: getTimerWorkerHealth() };
+    const twitchHealth = twitchConnectionManager.health();
+    const channelIds = twitchHealth.sessions.map((s: any) => s.channelId);
+    const channels = channelIds.length ? await prisma.channel.findMany({ where: { id: { in: channelIds } }, select: { id: true, displayName: true, twitchLogin: true, twitchChannelId: true } }) : [];
+    const channelMap = new Map(channels.map((c) => [c.id, c]));
+    const sessions = twitchHealth.sessions.map((s: any) => ({ ...s, ...channelMap.get(s.channelId) }));
+    return { ok: true, db: 'up', backend: 'up', twitch: { eventSubEnabled: env.twitchEventSubEnabled, ...twitchHealth, sessions }, timerWorker: getTimerWorkerHealth() };
   });
 
   const ensureEnabled = (rep: any) => {
