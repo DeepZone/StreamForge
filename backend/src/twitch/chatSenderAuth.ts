@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma.js';
 import { decryptSecret, encryptSecret } from '../utils/crypto.js';
 import { TwitchApi } from './TwitchApi.js';
+import { env } from '../config/env.js';
 
 const REFRESH_WINDOW_MS = 5 * 60 * 1000;
 
@@ -54,11 +55,12 @@ export const resolveChatSendAuth = async (channelId: string): Promise<ChatSendAu
       const refreshed = await refreshTokenIfNeeded('bot_account', { ...bot, id: bot.id });
       return { broadcasterId: channel.twitchChannelId, senderId: bot.twitchUserId, accessToken: refreshed.accessToken, sendAs: 'bot_account', botAccountLogin: bot.twitchLogin, botTokenStatus: 'ok' };
     } catch {
-      return { broadcasterId: channel.twitchChannelId, senderId: channel.twitchChannelId, accessToken: '', sendAs: 'broadcaster', botAccountLogin: bot.twitchLogin, botTokenStatus: 'token_error' };
+      if (!env.twitchAllowBroadcasterSendFallback) return { broadcasterId: channel.twitchChannelId, senderId: bot.twitchUserId, accessToken: '', sendAs: 'bot_account', botAccountLogin: bot.twitchLogin, botTokenStatus: 'token_error' };
     }
   }
 
   const token = channel.tokens;
+  if (!env.twitchAllowBroadcasterSendFallback) return { broadcasterId: channel.twitchChannelId, senderId: channel.twitchChannelId, accessToken: '', sendAs: 'broadcaster', botTokenStatus: 'missing' };
   if (!token) return { broadcasterId: channel.twitchChannelId, senderId: channel.twitchChannelId, accessToken: '', sendAs: 'broadcaster', botTokenStatus: 'missing' };
   try {
     const refreshed = await refreshTokenIfNeeded('broadcaster', { ...token, channelId: token.channelId });

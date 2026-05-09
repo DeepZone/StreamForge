@@ -56,7 +56,14 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  app.get('/api/admin/twitch/platform-bot/start', { preHandler: requireAuth }, async (req, rep) => {
+  
+  app.get('/api/admin/twitch/platform-bot', { preHandler: requireAuth }, async (req, rep) => {
+    if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
+    const bot = await prisma.platformTwitchBot.findFirst({ orderBy: { updatedAt: 'desc' } });
+    if (!bot) return { connected: false, botLogin: null, botDisplayName: null, avatarUrl: null, tokenExpiresAt: null, scopes: [], isActive: false };
+    return { connected: true, botLogin: bot.twitchLogin, botDisplayName: bot.displayName, avatarUrl: bot.avatarUrl, tokenExpiresAt: bot.expiresAt, scopes: JSON.parse(bot.scopesJson || '[]'), isActive: bot.isActive };
+  });
+app.get('/api/admin/twitch/platform-bot/start', { preHandler: requireAuth }, async (req, rep) => {
     const authed = req as AuthedRequest;
     if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
     const state = crypto.randomBytes(32).toString('hex');
