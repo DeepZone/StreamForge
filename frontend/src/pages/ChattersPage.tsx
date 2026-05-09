@@ -64,7 +64,7 @@ export default function ChattersPage() {
   }, [data, q, sort]);
 
   return <div className='space-y-3'>
-    <PageHeader title='Chatters' subtitle='Aktuelle Twitch-Chatmitglieder inkl. Moderation und Rollenverwaltung.' />
+    <PageHeader title='Chatters' subtitle='Aktuelle Twitch-Chatmitglieder inkl. Moderation und StreamForge-Rollenverwaltung.' />
     {error && <ErrorBox message={error} />}
     <div className='flex gap-2 flex-wrap'>
       <input className='px-3 py-2 rounded bg-zinc-900 border border-zinc-700' placeholder='Suche Username' value={q} onChange={e => setQ(e.target.value)} />
@@ -80,7 +80,7 @@ export default function ChattersPage() {
         <div>Messages: {c.messageCount}</div>
         <div>Commands: {c.commandCount}</div>
         <div>Last Seen: {c.lastSeenAt ? new Date(c.lastSeenAt).toLocaleString() : '-'}</div>
-        <div className='text-xs'>{roleIcon(role)} {role || 'viewer'}</div>
+        <div className='text-xs' title='StreamForge-Rolle'>{roleIcon(role)} {role || 'viewer'}</div>
         <select className='px-2 py-1 rounded bg-zinc-900 border border-zinc-700' value={role || 'viewer'} onChange={(e) => void setRole(c.userLogin, e.target.value as Role)}>{roleOptions.map((r) => <option key={r.value} value={r.value}>{r.icon} {r.label}</option>)}</select>
         <button className='px-2 py-1 rounded bg-amber-700 text-white' onClick={() => void runModeration(c)}>{action}</button>
       </div>;

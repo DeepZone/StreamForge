@@ -124,7 +124,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     const { userLogin, role } = req.body as { userLogin?: string; role?: Role };
     if (!userLogin || !role || !twitchChannelRoles.includes(role)) return rep.code(400).send({ errorCode: 'validation.invalid_payload', detail: 'Nur Twitch-Channel-Rollen sind erlaubt.' });
     const user = await prisma.user.findFirst({ where: { twitchLogin: { equals: userLogin, mode: 'insensitive' } } });
-    if (!user) return rep.code(404).send({ errorCode: 'user.not_found', detail: 'Der User hat noch keinen StreamForge-Account.' });
+    if (!user) return rep.code(404).send({ errorCode: 'user.not_found', detail: 'Diese Rollenverwaltung ist nur für StreamForge-Accounts. Twitch-Rollen (z. B. Mod) änderst du direkt bei Twitch.' });
     const member = await prisma.channelMember.upsert({
       where: { channelId_userId: { channelId, userId: user.id } },
       create: { channelId, userId: user.id, role },
