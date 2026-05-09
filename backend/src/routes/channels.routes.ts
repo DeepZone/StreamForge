@@ -8,6 +8,8 @@ import { eventBus } from '../core/EventBus.js';
 
 const twitchApi = new TwitchApi();
 
+const twitchChannelRoles: Role[] = ['viewer', 'channel_moderator', 'channel_admin', 'channel_owner'];
+
 const channelsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/channels', { preHandler: requireAuth }, async (req) => {
     const authed = req as AuthedRequest;
@@ -120,7 +122,7 @@ const channelsRoutes: FastifyPluginAsync = async (app) => {
     await requireChannelRole(req as AuthedRequest, rep, 'channel_admin');
     const { channelId } = req.params as { channelId: string };
     const { userLogin, role } = req.body as { userLogin?: string; role?: Role };
-    if (!userLogin || !role || !Object.values(Role).includes(role)) return rep.code(400).send({ errorCode: 'validation.invalid_payload' });
+    if (!userLogin || !role || !twitchChannelRoles.includes(role)) return rep.code(400).send({ errorCode: 'validation.invalid_payload', detail: 'Nur Twitch-Channel-Rollen sind erlaubt.' });
     const user = await prisma.user.findFirst({ where: { twitchLogin: { equals: userLogin, mode: 'insensitive' } } });
     if (!user) return rep.code(404).send({ errorCode: 'user.not_found', detail: 'Der User hat noch keinen StreamForge-Account.' });
     const member = await prisma.channelMember.upsert({
