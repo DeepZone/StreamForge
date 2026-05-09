@@ -372,3 +372,23 @@ Wichtig:
 5. Command daraus erstellen.
 6. Im Twitch Chat testen.
 7. Recap generieren.
+
+## Produktiver Twitch-MVP Test
+
+1. Admin Login.
+2. Twitch Login.
+3. EventSub aktivieren.
+4. `!ping` testen.
+5. Custom Command anlegen.
+6. Timer anlegen.
+7. Logs prüfen.
+8. Community Radar prüfen.
+9. Recap generieren.
+
+## Bekannte MVP-Grenzen
+
+- Discord ist noch nicht aktiv.
+- Recaps sind heuristisch.
+- Community Radar ist heuristisch.
+- Keine automatische Moderation.
+- Timer sind abhängig von Worker/Backend-Laufzeit.
