@@ -20,7 +20,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     const channels = channelIds.length ? await prisma.channel.findMany({ where: { id: { in: channelIds } }, select: { id: true, displayName: true, twitchLogin: true, twitchChannelId: true } }) : [];
     const channelMap = new Map(channels.map((c) => [c.id, c]));
     const sessions = twitchHealth.sessions.map((s: any) => ({ ...s, ...channelMap.get(s.channelId) }));
-    return { ok: true, db: 'up', backend: 'up', twitch: { eventSubEnabled: env.twitchEventSubEnabled, ...twitchHealth, sessions }, timerWorker: getTimerWorkerHealth() };
+    return { ok: true, db: 'up', backend: 'up', twitch: { ...twitchHealth, sessions }, timerWorker: getTimerWorkerHealth() };
   });
 
   const ensureEnabled = (rep: any) => {
