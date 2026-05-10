@@ -6,18 +6,16 @@ import { generateRecap } from '../services/recapService.js';
 import { audit } from '../services/auditService.js';
 
 const recapsRoutes: FastifyPluginAsync = async (app) => {
-  app.post('/api/channels/:channelId/recaps/generate', { preHandler: requireAuth }, async (req: any, rep) => {
-    await requireChannelRole(req as AuthedRequest, rep);
-    return generateRecap(req.params.channelId, req.body || {});
-  });
   app.get('/api/channels/:channelId/recaps', { preHandler: requireAuth }, async (req: any, rep) => {
-    await requireChannelRole(req as AuthedRequest, rep);
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
     return prisma.streamRecap.findMany({ where: { channelId: req.params.channelId }, orderBy: { createdAt: 'desc' }, take: 50 });
   });
-  app.get('/api/channels/:channelId/recaps/:recapId', { preHandler: requireAuth }, async (req: any, rep) => {
-    await requireChannelRole(req as AuthedRequest, rep);
-    return prisma.streamRecap.findFirst({ where: { id: req.params.recapId, channelId: req.params.channelId } });
+
+  app.post('/api/channels/:channelId/recaps', { preHandler: requireAuth }, async (req: any, rep) => {
+    await requireChannelRole(req as AuthedRequest, rep, 'channel_moderator');
+    return generateRecap(req.params.channelId, req.body || {});
   });
+
   app.delete('/api/channels/:channelId/recaps/:recapId', { preHandler: requireAuth }, async (req: any, rep) => {
     const authed = req as AuthedRequest;
     await requireChannelRole(authed, rep, 'channel_admin');
@@ -26,7 +24,6 @@ const recapsRoutes: FastifyPluginAsync = async (app) => {
     const recap = await prisma.streamRecap.findFirst({ where: { id: req.params.recapId, channelId: req.params.channelId } });
     if (!recap) return rep.code(404).send({ errorCode: 'recap.not_found' });
     await prisma.streamRecap.delete({ where: { id: recap.id } });
-    await prisma.botEvent.create({ data: { channelId: req.params.channelId, platform: 'twitch', eventType: 'recap_deleted', payloadJson: JSON.stringify({ recapId: recap.id }) } });
     await audit('recap.delete', authed.session.id, req.params.channelId, { recapId: recap.id });
     return { ok: true };
   });

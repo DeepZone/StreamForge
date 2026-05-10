@@ -737,3 +737,14 @@ BASE_URL=https://www.streamforge-bot.com EMAIL=owner@example.test PASSWORD='***'
 - `backend/src/routes/twitchModeration.routes.ts`: Twitch Moderationsaktionen.
 - `backend/src/routes/platformBot.routes.ts`: Plattform-Bot Status/Checks.
 - `backend/src/routes/channelDebug.routes.ts`: Twitch Debug-Endpoint.
+
+## Community Radar
+- Zeigt Chat-Aktivität im Zeitraum (Nachrichten gesamt, aktive User, Commands, Peak-Stunde, Nachrichten pro Stunde).
+- Zeigt aktive Zuschauer und neue aktive Zuschauer auf Basis beobachtbarer Chatdaten.
+- Erkennt relevante Themen mit Stopword-Filter und Mindesthäufigkeit statt roher Wortliste.
+- Erkennt wiederkehrende Fragen per Normalisierung und Gruppierung ähnlicher Fragen.
+
+## Recaps
+- Erzeugt automatische Stream-Recaps aus Chatdaten (regelbasiert, ohne externe KI).
+- Recaps enthalten Summary, Kennzahlen, Top-Themen, häufige Fragen, Top-Viewer und Top-Commands.
+- Recaps können erstellt, gespeichert, gelistet und gelöscht werden.

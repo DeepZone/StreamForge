@@ -1,15 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiDelete, apiGet, apiPost } from '../api/client';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import PageHeader from '../components/ui/PageHeader';
+import LoadingState from '../components/ui/LoadingState';
+import ErrorBox from '../components/ui/ErrorBox';
 
 export default function RecapsPage() {
   const { channelId = '' } = useParams();
-  const [items, setItems] = useState<any[]>([]); const [selected, setSelected] = useState<any>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true);
-  const load = async () => { setLoading(true); try { const list = await apiGet<any[]>(`/api/channels/${channelId}/recaps`); setItems(list); setSelected(list[0] ?? null); setError(''); } catch(e:any){ setError(e?.data?.error ?? 'Fehler'); } finally { setLoading(false); } };
-  useEffect(()=>{ void load(); }, [channelId]);
-  const parse = (v: any) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
-  return <div className='space-y-4'><h1 className='text-xl font-bold'>Recaps</h1><button className='border px-3 py-1' onClick={()=>apiPost(`/api/channels/${channelId}/recaps/generate`,{}).then(load)}>Recap generieren</button>{loading && <p>Lade…</p>}{error && <p className='text-red-300'>{error}</p>}
-  {items.length===0 ? <p>Keine Recaps vorhanden.</p> : <div className='grid md:grid-cols-3 gap-4'><div>{items.map((x)=><div key={x.id} className='border p-2 my-1 flex justify-between gap-2'><button className='text-left flex-1' onClick={()=>setSelected(x)}>{new Date(x.createdAt).toLocaleString()}</button><button className='border px-2' onClick={()=>{if(confirm('Recap löschen?')) apiDelete(`/api/channels/${channelId}/recaps/${x.id}`).then(load);}}>Löschen</button></div>)}</div><div className='md:col-span-2'>{selected && <RecapDetail recap={selected} parse={parse} />}</div></div>}</div>;
+  const [range, setRange] = useState('24h');
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const load = async () => { setLoading(true); try { setItems(await apiGet(`/api/channels/${channelId}/recaps`)); setError(''); } catch (e: any) { setError(e?.data?.error ?? 'Fehler'); } finally { setLoading(false); } };
+  useEffect(() => { void load(); }, [channelId]);
+  const parse = (v: any) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return {}; } };
+
+  return <div className='space-y-4'>
+    <PageHeader title='Recaps' subtitle='Automatisch aus Chatdaten erzeugte Stream-Rückblicke.'/>
+    <div className='flex gap-2'><select className='border px-2 py-1' value={range} onChange={(e)=>setRange(e.target.value)}>{['1h','6h','24h','7d'].map((r)=><option key={r}>{r}</option>)}</select><button className='border px-3 py-1' onClick={()=>apiPost(`/api/channels/${channelId}/recaps`, { range }).then(load)}>Recap erzeugen</button></div>
+    {loading && <LoadingState label='Recaps werden geladen…'/>}
+    {error && <ErrorBox message={error} />}
+    {!loading && items.length === 0 && <p className='text-sm text-slate-400'>Noch keine Recaps vorhanden.</p>}
+    {items.map((item) => { const h = parse(item.highlightsJson); return <div key={item.id} className='border p-3 space-y-2'>
+      <div className='flex items-center justify-between'><h2 className='font-semibold'>{h.title || 'Recap'}</h2><button className='border px-2 py-1' onClick={()=>setDeleteId(item.id)}>Löschen</button></div>
+      <p className='text-xs text-slate-400'>{h.range} · {new Date(item.createdAt).toLocaleString()}</p>
+      <p>{h.summaryText || item.summary}</p>
+      <p className='text-sm'>Nachrichten: {h.stats?.messagesTotal ?? 0} · aktive User: {h.stats?.uniqueUsers ?? 0} · Commands: {h.stats?.commandsTotal ?? 0} · Peak: {h.stats?.peakHour ?? '-'}</p>
+      <p className='text-sm'>Top Themen: {(h.topTopics || []).map((t:any)=>`${t.term} (${t.count})`).join(', ') || '—'}</p>
+      <p className='text-sm'>Häufige Fragen: {(h.frequentQuestions || []).map((q:any)=>`${q.text} (${q.count})`).join(' | ') || '—'}</p>
+      <p className='text-sm'>Top Commands: {(h.topCommands || []).map((c:any)=>`${c.name} (${c.count})`).join(', ') || '—'}</p>
+    </div>; })}
+    <ConfirmDialog open={!!deleteId} title='Recap löschen?' description='Dieser Recap wird dauerhaft gelöscht.' confirmLabel='Löschen' onCancel={()=>setDeleteId(null)} onConfirm={async()=>{if(!deleteId)return; await apiDelete(`/api/channels/${channelId}/recaps/${deleteId}`); setDeleteId(null); await load();}} />
+  </div>;
 }
-function RecapDetail({ recap, parse }: any){ const h=parse(recap.highlightsJson)||{}; const f=parse(recap.frequentQuestionsJson)||[]; const s=parse(recap.suggestedCommandsJson)||[]; const r=parse(recap.recommendationsJson)||[]; const e=parse(recap.engagementJson)||{}; return <div className='space-y-2'><p><b>Summary:</b> {recap.summary}</p><Block title='Highlights' items={[...(h.topTopics||[]).map((t:any)=>`${t.topic} (${t.count})`)]}/><Block title='Häufige Fragen' items={f.map((x:any)=>`${x.question} (${x.count})`)}/><Block title='Command-Vorschläge' items={s.map((x:any)=>`!${x.suggestedName} (${x.count})`)}/><Block title='Empfehlungen' items={r}/><Block title='Engagement-Daten' items={[`Score: ${e.engagementScore ?? '-'}`,`Nachrichten: ${e.totalMessages ?? '-'}`,`Aktive Chatter: ${e.uniqueChatters ?? '-'}`]} /></div>; }
-function Block({ title, items }: { title: string; items: any[] }) { return <div><h3 className='font-semibold'>{title}</h3>{items?.length ? items.map((x,i)=><div key={i} className='border p-2 my-1'>{String(x)}</div>) : <p className='text-sm text-slate-400'>Keine Daten.</p>}</div>; }
