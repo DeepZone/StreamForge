@@ -69,5 +69,22 @@ app.get('/api/public/twitch/oauth-url', async () => {
   return { authorizeUrl: url.toString(), redirectUri: env.twitchRedirectUri, scopes: [...TWITCH_BROADCASTER_SCOPES] };
 });
 
-app.register(setupRoutes); app.register(authRoutes); app.register(channelsRoutes); app.register(channelSettingsRoutes); app.register(channelLogsRoutes); app.register(liveChatRoutes); app.register(chattersRoutes); app.register(twitchRolesRoutes); app.register(twitchModerationRoutes); app.register(platformBotRoutes); app.register(channelDebugRoutes); app.register(commandsRoutes); app.register(timersRoutes); app.register(campaignsRoutes); app.register(adminRoutes); app.register(communityRoutes); app.register(recapsRoutes); app.register(moderationRoutes);
+app.register(setupRoutes);
+app.register(authRoutes);
+app.register(channelsRoutes);
+app.register(channelSettingsRoutes);
+app.register(channelLogsRoutes);
+app.register(liveChatRoutes);
+app.register(chattersRoutes);
+app.register(twitchRolesRoutes);
+app.register(twitchModerationRoutes);
+app.register(platformBotRoutes);
+app.register(channelDebugRoutes);
+app.register(commandsRoutes);
+app.register(timersRoutes);
+app.register(campaignsRoutes);
+app.register(adminRoutes);
+app.register(communityRoutes);
+app.register(recapsRoutes);
+app.register(moderationRoutes);
 export default app;
