@@ -687,3 +687,30 @@ X-Accel-Buffering: no
 ```
 
 Hinweis zur Diagnose: Wenn LiveChat dauerhaft `reconnecting` zeigt und `liveStream.subscribers=0` bleibt, blockiert typischerweise Auth, Route oder Reverse Proxy die SSE-Verbindung.
+
+## Smoke Test
+
+Das lokale Smoke-Script liegt unter `scripts/smoke-test-local.sh`.
+
+ENV-Variablen:
+- `BASE_URL` (Default: `https://www.streamforge-bot.com`)
+- `EMAIL` und `PASSWORD` (optional für Login)
+- `CHANNEL_ID` (optional für Channel-spezifische Endpunkte)
+
+Beispiel:
+
+```bash
+BASE_URL=https://www.streamforge-bot.com EMAIL=owner@example.test PASSWORD='***' CHANNEL_ID=abc123 bash scripts/smoke-test-local.sh
+```
+
+## Backend Route Struktur
+
+- `backend/src/routes/channels.routes.ts`: Channel-Liste, Channel-Anlage, Channel-Detail.
+- `backend/src/routes/channelSettings.routes.ts`: Channel Settings lesen/schreiben.
+- `backend/src/routes/channelLogs.routes.ts`: Channel Logs.
+- `backend/src/routes/liveChat.routes.ts`: Chat-History, SSE-Stream, manuelles Senden.
+- `backend/src/routes/chatters.routes.ts`: Twitch Chatters.
+- `backend/src/routes/twitchRoles.routes.ts`: Twitch Rollen-Aktionen + Historie.
+- `backend/src/routes/twitchModeration.routes.ts`: Twitch Moderationsaktionen.
+- `backend/src/routes/platformBot.routes.ts`: Plattform-Bot Status/Checks.
+- `backend/src/routes/channelDebug.routes.ts`: Twitch Debug-Endpoint.
