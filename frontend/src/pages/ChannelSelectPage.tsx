@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
+import { isSystemAdmin } from '../components/ProtectedRoute';
 import { apiGet } from '../api/client';
 import { getChannelDisplayName, getChannelHandle, isFallbackChannelName, truncateId, type ChannelLike } from '../utils/channelDisplay';
 
@@ -12,6 +13,10 @@ export default function ChannelSelectPage() {
   const [channels, setChannels] = useState<ChannelOption[]>([]);
 
   useEffect(() => {
+    if (!loading && isSystemAdmin(user?.role)) {
+      navigate('/admin', { replace: true });
+      return;
+    }
     if (!loading && user?.channels?.length === 1) {
       navigate(`/dashboard/channels/${user.channels[0].channelId}`, { replace: true });
     }

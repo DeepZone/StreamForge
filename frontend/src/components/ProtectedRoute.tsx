@@ -7,3 +7,5 @@ export default function ProtectedRoute({ children }: any) {
   if (!user) return <Navigate to='/login' replace />;
   return children;
 }
+
+export const isSystemAdmin = (role?: string) => role === 'system_owner' || role === 'platform_admin';
