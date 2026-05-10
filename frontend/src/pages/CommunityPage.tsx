@@ -1,31 +1,44 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { apiGet, apiPost } from '../api/client';
+import { apiGet } from '../api/client';
+import PageHeader from '../components/ui/PageHeader';
+import LoadingState from '../components/ui/LoadingState';
+import ErrorBox from '../components/ui/ErrorBox';
 
-const ranges = { '24h': 1, '7d': 7, '30d': 30 } as const;
+type Range = '1h' | '6h' | '24h' | '7d';
+
 export default function CommunityPage() {
   const { channelId = '' } = useParams();
-  const [rangeKey, setRangeKey] = useState<keyof typeof ranges>('7d');
-  const [radar, setRadar] = useState<any>(null); const [faq, setFaq] = useState<any[]>([]); const [suggestions, setSuggestions] = useState<any[]>([]); const [error, setError] = useState('');
-  const query = useMemo(() => { const to = new Date(); const from = new Date(to.getTime() - ranges[rangeKey] * 86400000); return new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), limit: '20' }).toString(); }, [rangeKey]);
-  const load = async () => { try { setError(''); const [a,b,c] = await Promise.all([apiGet(`/api/channels/${channelId}/community/radar?${query}`), apiGet(`/api/channels/${channelId}/community/faq?${query}`), apiGet(`/api/channels/${channelId}/commands/suggestions?${query}`)]); setRadar(a); setFaq(Array.isArray(b) ? b : []); setSuggestions(Array.isArray(c) ? c : []);} catch(e:any){setError(e?.data?.error ?? 'Fehler');} };
-  useEffect(() => { void load(); }, [channelId, query]);
-  if (!radar) return <div className='p-6'>Loading…</div>;
-  const noData = (radar?.summary?.totalMessages ?? 0) === 0;
+  const [range, setRange] = useState<Range>('24h');
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    try { setData(await apiGet(`/api/channels/${channelId}/community/radar?range=${range}`)); setError(''); }
+    catch (e: any) { setError(e?.data?.error ?? 'Fehler beim Laden'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, [channelId, range]);
+
+  const empty = !loading && (data?.activity?.messagesTotal ?? 0) === 0;
   return <div className='space-y-4'>
-    <h1 className='text-xl font-bold'>Community Radar</h1>
-    <select className='border px-2 py-1' value={rangeKey} onChange={(e)=>setRangeKey(e.target.value as any)}>{Object.keys(ranges).map((k)=><option key={k}>{k}</option>)}</select>
-    {error && <p className='rounded border border-red-700 bg-red-950 p-2 text-red-300'>{error}</p>}
-    <div className='grid md:grid-cols-3 gap-2'>{Object.entries(radar.summary || {}).map(([k,v]) => <div className='border p-2' key={k}><div className='text-xs text-slate-300'>{k}</div><div className='text-lg font-semibold'>{String(v)}</div></div>)}</div>
-    {noData && <p className='text-sm text-slate-400'>Schreibe einige Nachrichten im Twitch Chat und lade danach neu.</p>}<List title='Top Topics' rows={radar.topTopics} render={(x:any)=><span>{x.topic} · Score {x.score} · Keywords: {(x.keywords||[]).join(', ')} · Messages: {x.messageCount}</span>} empty='Noch keine klaren Themen erkannt.' />
-    <List title='Top Chatter' rows={radar.topChatters} render={(x:any)=><span>{x.displayName || x.username} · Nachrichten {x.messageCount}</span>} />
-    <List title='Neue Zuschauer' rows={radar.newViewers} render={(x:any)=><span>{x.username}</span>} />
-    <List title='Wiederkehrende Zuschauer' rows={radar.returningViewers} render={(x:any)=><span>{x.username} · Nachrichten {x.messageCount}</span>} />
-    {!!radar.watchlist?.length && <List title='Watchlist (nur manuelle Prüfung)' rows={radar.watchlist} render={(x:any)=><span>{x.username} · {x.reason}</span>} />}
-    {!!radar.potentialModerators?.length && <List title='Potential Moderators (manuelle Prüfung)' rows={radar.potentialModerators} render={(x:any)=><span>{x.username} · {x.reason}</span>} />}
-    <List title='Empfehlungen' rows={radar.recommendations || []} render={(x:any)=><span>{x}</span>} empty='Keine Empfehlungen.' />
-    <div><h2 className='font-semibold'>FAQ</h2>{faq.length===0?<p className='text-sm text-slate-400'>Keine Daten.</p>:faq.map((f,i)=><div key={i} className='border p-2 my-1'>{f.question} <b>({f.count})</b></div>)}</div>
-    <div><h2 className='font-semibold'>Command-Vorschläge</h2>{suggestions.length===0?<p className='text-sm text-slate-400'>Keine Vorschläge.</p>:suggestions.map((s,i)=><div key={i} className='border p-2 my-1 flex items-center justify-between'><div><div>{s.sourceQuestion}</div><div className='text-sm text-slate-300'>!{s.suggestedName} {s.alreadyExists?'(existiert bereits)':''}</div></div>{!s.alreadyExists && <button className='border px-2 py-1' onClick={()=>apiPost(`/api/channels/${channelId}/commands/from-suggestion`,{name:s.suggestedName,response:s.suggestedResponse,sourceQuestion:s.sourceQuestion}).then(load)}>Command erstellen</button>}</div>)}</div>
+    <PageHeader title='Community Radar' subtitle='Aktivität, Themen und wiederkehrende Fragen aus deinem Chat.'/>
+    <div className='flex gap-2'><select className='border px-2 py-1' value={range} onChange={(e) => setRange(e.target.value as Range)}>{['1h','6h','24h','7d'].map((r)=><option key={r}>{r}</option>)}</select><button className='border px-3 py-1' onClick={()=>void load()}>Aktualisieren</button></div>
+    {loading && <LoadingState label='Radar wird geladen…'/>}
+    {error && <ErrorBox message={error} />}
+    {empty && <p className='text-sm text-slate-400'>Noch nicht genug Chatdaten für relevante Themen.</p>}
+    {data && !empty && <>
+      <div className='grid md:grid-cols-4 gap-2'>{[['Nachrichten',data.activity.messagesTotal],['aktive User',data.activity.uniqueUsers],['Commands',data.activity.commandsTotal],['Peak-Stunde',data.activity.peakHour]].map(([k,v])=><div className='border p-2' key={String(k)}><div className='text-xs'>{k}</div><div className='font-semibold'>{String(v)}</div></div>)}</div>
+      <SimpleList title='Nachrichten pro Stunde' rows={data.activity.perHour} render={(x:any)=><span>{x.hour} · {x.messages}</span>} />
+      <SimpleList title='Aktive Zuschauer' rows={data.activeViewers?.slice(0,10)} render={(x:any)=><span>{x.displayName||x.username} · M {x.messageCount} · C {x.commandCount} · Last {new Date(x.lastSeenAt).toLocaleString()}</span>} />
+      <SimpleList title='Neue aktive Zuschauer' rows={data.newActiveUsers} render={(x:any)=><span>{x.displayName||x.username} · M {x.messageCount} · First {new Date(x.firstSeenAt).toLocaleString()}</span>} />
+      <SimpleList title='Häufige Fragen' rows={data.frequentQuestions} empty='Noch keine wiederkehrenden Fragen erkannt.' render={(x:any)=><div><div>{x.text} ({x.count} / {x.users} User)</div><div className='text-xs text-slate-400'>{(x.examples||[]).join(' | ')}</div></div>} />
+      <div><h2 className='font-semibold'>Relevante Themen</h2><div className='flex flex-wrap gap-2'>{(data.topics||[]).slice(0,20).map((t:any)=><span className='border px-2 py-1 text-sm' key={t.term}>{t.term} ({t.count})</span>)}</div>{!data.topics?.length&&<p className='text-sm text-slate-400'>Noch nicht genug Chatdaten für relevante Themen.</p>}</div>
+      <SimpleList title='Commands' rows={data.commands} render={(x:any)=><span>{x.name} · {x.count}</span>} />
+    </>}
   </div>;
 }
-function List({ title, rows, render, empty='Keine Daten.' }: { title: string; rows: any[]; render: (x: any) => React.ReactNode; empty?: string }) { return <div><h2 className='font-semibold'>{title}</h2>{!rows?.length ? <p className='text-sm text-slate-400'>{empty}</p> : rows.map((row, i) => <div key={i} className='border p-2 my-1'>{render(row)}</div>)}</div>; }
+
+function SimpleList({ title, rows, render, empty = 'Keine Daten.' }: any) { return <div><h2 className='font-semibold'>{title}</h2>{rows?.length ? rows.map((r:any,i:number)=><div className='border p-2 my-1' key={i}>{render(r)}</div>) : <p className='text-sm text-slate-400'>{empty}</p>}</div>; }

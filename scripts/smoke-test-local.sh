@@ -8,6 +8,6 @@ rm -f "$COOKIE_JAR"
 check 200 /api/setup/status
 if [[ -n "$EMAIL" && -n "$PASSWORD" ]]; then code=$(req POST "$BASE_URL/api/auth/login" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"); echo "[SMOKE] POST /api/auth/login -> $code"; fi
 for p in /api/auth/me /api/channels; do code=$(req GET "$BASE_URL$p"); echo "[SMOKE] GET $p -> $code"; done
-if [[ -n "$CHANNEL_ID" ]]; then for p in "/api/channels/$CHANNEL_ID" "/api/channels/$CHANNEL_ID/settings" "/api/channels/$CHANNEL_ID/chat/messages" "/api/channels/$CHANNEL_ID/twitch/debug" "/api/channels/$CHANNEL_ID/logs" "/api/channels/$CHANNEL_ID/commands"; do code=$(req GET "$BASE_URL$p"); echo "[SMOKE] GET $p -> $code"; done; fi
+if [[ -n "$CHANNEL_ID" ]]; then for p in "/api/channels/$CHANNEL_ID" "/api/channels/$CHANNEL_ID/settings" "/api/channels/$CHANNEL_ID/chat/messages" "/api/channels/$CHANNEL_ID/twitch/debug" "/api/channels/$CHANNEL_ID/logs" "/api/channels/$CHANNEL_ID/commands" "/api/channels/$CHANNEL_ID/community/radar?range=24h" "/api/channels/$CHANNEL_ID/recaps"; do code=$(req GET "$BASE_URL$p"); echo "[SMOKE] GET $p -> $code"; done; fi
 code=$(req GET "$BASE_URL/api/admin/health"); echo "[SMOKE] GET /api/admin/health -> $code (optional)"
 echo "[SMOKE] done"
