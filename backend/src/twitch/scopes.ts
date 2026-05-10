@@ -13,7 +13,8 @@ export const TWITCH_BROADCASTER_SCOPES = [
   'moderator:manage:banned_users',
   'channel:manage:vips',
   'channel:read:vips',
-  'channel:manage:moderators'
+  'channel:manage:moderators',
+  'channel:read:subscriptions'
 ] as const;
 
 export const TWITCH_BOT_ACCOUNT_SCOPES = [

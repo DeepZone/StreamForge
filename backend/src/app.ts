@@ -21,6 +21,7 @@ import twitchRolesRoutes from './routes/twitchRoles.routes.js';
 import twitchModerationRoutes from './routes/twitchModeration.routes.js';
 import platformBotRoutes from './routes/platformBot.routes.js';
 import channelDebugRoutes from './routes/channelDebug.routes.js';
+import channelStatusRoutes from './routes/channelStatus.routes.js';
 import { TWITCH_BROADCASTER_SCOPES } from './twitch/scopes.js';
 
 const app = Fastify({ trustProxy: env.trustProxy, bodyLimit: 256 * 1024, disableRequestLogging: true });
@@ -80,6 +81,7 @@ app.register(twitchRolesRoutes);
 app.register(twitchModerationRoutes);
 app.register(platformBotRoutes);
 app.register(channelDebugRoutes);
+app.register(channelStatusRoutes);
 app.register(commandsRoutes);
 app.register(timersRoutes);
 app.register(campaignsRoutes);

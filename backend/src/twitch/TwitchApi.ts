@@ -216,4 +216,20 @@ export class TwitchApi {
     return { ok: true };
   }
 
+  async getStreamByUserId(params: { userId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/streams');
+    url.searchParams.set('user_id', params.userId);
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    const data = await this.parseResponse<{ data: Array<{ viewer_count: number; title: string; game_name: string; game_id: string; started_at: string; thumbnail_url: string }> }>(res, 'get_stream_by_user_id');
+    return data.data[0] ?? null;
+  }
+
+  async getBroadcasterSubscriptionsCount(params: { broadcasterId: string; accessToken: string }) {
+    const url = new URL('https://api.twitch.tv/helix/subscriptions');
+    url.searchParams.set('broadcaster_id', params.broadcasterId);
+    url.searchParams.set('first', '1');
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    return this.parseResponse<{ total: number; points?: number | null }>(res, 'get_broadcaster_subscriptions_count');
+  }
+
 }
