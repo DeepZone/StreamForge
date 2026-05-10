@@ -748,3 +748,12 @@ BASE_URL=https://www.streamforge-bot.com EMAIL=owner@example.test PASSWORD='***'
 - Erzeugt automatische Stream-Recaps aus Chatdaten (regelbasiert, ohne externe KI).
 - Recaps enthalten Summary, Kennzahlen, Top-Themen, häufige Fragen, Top-Viewer und Top-Commands.
 - Recaps können erstellt, gespeichert, gelistet und gelöscht werden.
+
+## Channel Statusstrip
+
+- Der Statusstrip im Channel-Dashboard zeigt Live-Status, Viewer, Titel, Kategorie, Laufzeit, EventSub-Status, Bot-Status und Bitrate-Hinweis.
+- Live-Status und Zuschauer kommen aus Twitch Helix `Get Streams` (`/helix/streams`).
+- Subscriber-Zahlen benötigen den Scope `channel:read:subscriptions`. Falls der Scope fehlt, wird nur `Subs nicht verfügbar` angezeigt.
+- Nach Scope-Erweiterungen muss der Streamer Twitch erneut verbinden, damit neue Scopes im Token enthalten sind.
+- Bitrate wird aktuell **nicht** erfunden: Twitch Helix liefert im verwendeten Endpunkt keine echte Stream-Bitrate, daher zeigt die UI `Bitrate: n/a`.
+- Der Status aktualisiert sich periodisch (30s Polling) und kann manuell aktualisiert werden.
