@@ -1,75 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiPost } from '../api/client';
+import Card from '../components/ui/Card';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import EmptyState from '../components/ui/EmptyState';
 import ErrorBox from '../components/ui/ErrorBox';
+import LoadingState from '../components/ui/LoadingState';
+import PageHeader from '../components/ui/PageHeader';
+import StatusBadge from '../components/ui/StatusBadge';
 
-export default function ModerationPage() {
-  const { channelId = '' } = useParams();
-  const [items, setItems] = useState<any[]>([]);
-  const [actions, setActions] = useState<any[]>([]);
-  const [type, setType] = useState<'all'|'bans'|'timeouts'>('all');
-  const [username, setUsername] = useState('');
-  const [error, setError] = useState('');
-  const [form, setForm] = useState<any>({ userId: '', username: '', action: 'ban', durationSeconds: 300, reason: '' });
-
-  const load = async () => {
-    const q = new URLSearchParams({ limit: '100', type, username });
-    const [bans, log] = await Promise.all([
-      apiGet<any>(`/api/channels/${channelId}/moderation/bans?${q.toString()}`),
-      apiGet<any>(`/api/channels/${channelId}/moderation/actions?limit=50`)
-    ]);
-    setItems(bans.items || []);
-    setActions(log.actions || []);
-  };
-
-  useEffect(() => { void load().catch(handleErr); }, [channelId, type]);
-
-  const handleErr = (e: any) => {
-    if (e?.data?.errorCode === 'twitch.moderation.scope_missing') setError('Bitte Twitch erneut verbinden, damit StreamForge Bans und Timeouts verwalten darf. Fehlender Scope: moderator:manage:banned_users');
-    else setError(e?.data?.hint || e?.data?.errorCode || 'Fehler');
-  };
-
-  const submitManual = async () => {
-    const isUnban = form.action === 'unban' || form.action === 'untimeout';
-    if (!confirm('Diese Änderung wird direkt auf Twitch ausgeführt. Fortfahren?')) return;
-    const path = isUnban ? 'unban' : form.action;
-    const body: any = { userId: form.userId, username: form.username || undefined, reason: form.reason || undefined };
-    if (form.action === 'timeout') body.durationSeconds = Number(form.durationSeconds);
-    if (isUnban) body.actionLabel = form.action;
-    await apiPost(`/api/channels/${channelId}/moderation/${path}`, body);
-    await load();
-  };
-
-  const filtered = useMemo(() => items.filter((x) => !username || (x.userName || x.userLogin || '').toLowerCase().includes(username.toLowerCase())), [items, username]);
-
-  return <div className='space-y-4'>
-    <h1 className='text-xl font-bold'>Moderation</h1>
-    <p className='text-sm text-amber-300'>Hier siehst du aktive Twitch-Bans und Timeouts und kannst sie entfernen.</p>
-    {error && <ErrorBox message={error} />}
-    {error.includes('moderator:manage:banned_users') && <Link className='underline text-blue-300' to='/api/auth/twitch/start'>Twitch erneut verbinden</Link>}
-
-    <div className='border p-3 space-y-2'>
-      <div className='flex gap-2'>
-        <button className='border px-3 py-1' onClick={() => void load().catch(handleErr)}>Aktualisieren</button>
-        <select className='border px-2 py-1' value={type} onChange={e => setType(e.target.value as any)}><option value='all'>Alle</option><option value='bans'>Bans</option><option value='timeouts'>Timeouts</option></select>
-        <input className='border px-2 py-1' placeholder='Suche nach Username' value={username} onChange={(e) => setUsername(e.target.value)} />
-      </div>
-      <table className='w-full text-sm'>
-        <thead><tr><th>User</th><th>Typ</th><th>Grund</th><th>Erstellt am</th><th>Läuft ab</th><th>Moderator</th><th>Aktion</th></tr></thead>
-        <tbody>{filtered.map((u) => <tr key={`${u.userId}-${u.expiresAt || 'ban'}`}><td>{u.userName || u.userLogin}</td><td>{u.type === 'ban' ? 'Ban' : 'Timeout'}</td><td>{u.reason || '-'}</td><td>{u.createdAt ? new Date(u.createdAt).toLocaleString() : '-'}</td><td>{u.expiresAt ? new Date(u.expiresAt).toLocaleString() : '-'}</td><td>{u.moderatorName || '-'}</td><td><button className='underline' onClick={async () => { const label = u.type === 'ban' ? 'unban' : 'untimeout'; const msg = u.type === 'ban' ? `Möchtest du @${u.userName || u.userLogin} wirklich entbannen?` : `Möchtest du den Timeout von @${u.userName || u.userLogin} wirklich entfernen?`; if (!confirm(`${msg}\nDiese Änderung wird direkt auf Twitch ausgeführt.`)) return; await apiPost(`/api/channels/${channelId}/moderation/unban`, { userId: u.userId, username: u.userName || u.userLogin, actionLabel: label }); await load(); }}> {u.type === 'ban' ? 'Entbannen' : 'Timeout entfernen'} </button></td></tr>)}</tbody>
-      </table>
-    </div>
-
-    <div className='border p-3 space-y-2'>
-      <h2 className='font-semibold'>Manuelle Aktion</h2>
-      <input className='border px-2 py-1 w-full' placeholder='User ID' value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} />
-      <input className='border px-2 py-1 w-full' placeholder='Username optional' value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-      <select className='border px-2 py-1 w-full' value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}><option value='ban'>Ban</option><option value='timeout'>Timeout</option><option value='unban'>Unban</option><option value='untimeout'>Timeout entfernen</option></select>
-      {form.action === 'timeout' && <input className='border px-2 py-1 w-full' type='number' min={1} max={1209600} value={form.durationSeconds} onChange={e => setForm({ ...form, durationSeconds: e.target.value })} />}
-      <input className='border px-2 py-1 w-full' placeholder='Grund optional' value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
-      <button className='border px-3 py-1' onClick={() => void submitManual().catch(handleErr)}>Ausführen</button>
-    </div>
-
-    <div className='border p-3 space-y-2'><h2 className='font-semibold'>Moderationshistorie</h2>{actions.map((a) => <div key={a.id} className='text-sm'>{new Date(a.createdAt).toLocaleString()} · {a.actionType} · {a.targetUsername || a.targetExternalUserId} · {a.durationSeconds || '-'} · {a.reason || '-'} · {a.createdByUserId || '-'}</div>)}</div>
-  </div>;
-}
+export default function ModerationPage() { const { channelId = '' } = useParams(); const [items,setItems]=useState<any[]>([]); const [actions,setActions]=useState<any[]>([]); const [error,setError]=useState(''); const [loading,setLoading]=useState(true); const [ok,setOk]=useState(''); const [confirmOpen,setConfirmOpen]=useState(false); const [form,setForm]=useState<any>({ userId:'', username:'', action:'timeout', durationSeconds:300, reason:'' });
+  const load = async()=>{ setLoading(true); try { const [bans,log]=await Promise.all([apiGet<any>(`/api/channels/${channelId}/moderation/bans?limit=100`),apiGet<any>(`/api/channels/${channelId}/moderation/actions?limit=50`)]); setItems(bans.items||[]); setActions(log.actions||[]); setError(''); } catch(e:any){ setError(e?.data?.errorCode==='twitch.moderation.scope_missing'?'Bitte Twitch erneut verbinden.':(e?.data?.hint||e?.data?.errorCode||'Fehler')); } finally { setLoading(false);} };
+  useEffect(()=>{void load();},[channelId]);
+  const submit = async()=>{ if(!form.userId && !form.username){setError('User erforderlich.'); return;} if(form.action==='timeout' && !Number(form.durationSeconds)){setError('Timeout-Dauer erforderlich.'); return;} if((form.reason||'').length>500){setError('Grund maximal 500 Zeichen.'); return;} setConfirmOpen(true); };
+  const run = async()=>{ const path=form.action==='unban'?'unban':form.action; const body:any={userId:form.userId||undefined,username:form.username||undefined,reason:form.reason||undefined}; if(form.action==='timeout') body.durationSeconds=Number(form.durationSeconds); try{await apiPost(`/api/channels/${channelId}/moderation/${path}`,body); setOk('Moderationsaktion erfolgreich ausgeführt.'); setError(''); await load();}catch(e:any){setError(e?.data?.errorCode||'Aktion fehlgeschlagen.');}};
+  const active = useMemo(()=>items.filter((x:any)=>!x.expiresAt || new Date(x.expiresAt).getTime()>Date.now()),[items]);
+  return <div className='space-y-4'><PageHeader title='Moderation' subtitle='Arbeitsbereich für aktive Maßnahmen und Moderationsaktionen.' />{loading&&<LoadingState label='Moderation wird geladen…'/>}{error&&<ErrorBox message={error}/>}{error.includes('erneut verbinden')&&<Link to='/api/auth/twitch/start' className='underline text-amber-300 text-sm'>Bitte Twitch erneut verbinden.</Link>}{ok&&<div className='text-emerald-300 text-sm'>{ok}</div>}
+  <Card className='p-4 space-y-2'><h2 className='font-semibold'>Aktive Bans und Timeouts</h2>{active.length===0?<EmptyState title='Keine aktiven Maßnahmen' description='Aktuell sind keine Bans oder Timeouts aktiv.'/>
+  :active.map((u:any)=><div key={`${u.userId}-${u.createdAt}`} className='rounded-lg border border-zinc-700 p-2 text-sm flex items-center justify-between gap-2'><div>{u.userName||u.userLogin||u.userId} · <StatusBadge status={u.type==='ban'?'ban':'timeout'} /> · <StatusBadge status={u.expiresAt&&new Date(u.expiresAt).getTime()<Date.now()?'expired':'active'} /></div><button className='rounded-lg border border-zinc-700 px-2 py-1' onClick={()=>{setForm({ ...form, userId:u.userId, username:u.userName||u.userLogin, action:'unban' }); setConfirmOpen(true);}}>Unban/Timeout entfernen</button></div>)}</Card>
+  <Card className='p-4 space-y-2'><h2 className='font-semibold'>Manuelle Moderationsaktion</h2><input className='w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2' placeholder='User-ID' value={form.userId} onChange={e=>setForm({...form,userId:e.target.value})}/><input className='w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2' placeholder='Username' value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/><select className='w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2' value={form.action} onChange={e=>setForm({...form,action:e.target.value})}><option value='timeout'>Timeout</option><option value='ban'>Ban</option><option value='unban'>Unban</option></select>{form.action==='timeout'&&<input type='number' className='w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2' value={form.durationSeconds} onChange={e=>setForm({...form,durationSeconds:e.target.value})}/>}<input maxLength={500} className='w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2' placeholder='Grund (optional, max. 500)' value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/><button className='rounded-lg bg-indigo-600 px-3 py-2 text-sm' onClick={()=>void submit()}>Aktion ausführen</button></Card>
+  <Card className='p-4 space-y-2'><h2 className='font-semibold'>Moderationshistorie</h2>{actions.length===0?<EmptyState title='Keine Historie' description='Noch keine Moderationsaktionen geloggt.'/>:actions.map((a:any)=><div key={a.id} className='text-sm'>{new Date(a.createdAt).toLocaleString()} · <StatusBadge status={a.actionType||'unknown'} /> · {a.targetUsername || a.targetExternalUserId || '-'} · {a.reason || '-'}</div>)}</Card>
+  <ConfirmDialog open={confirmOpen} title='Moderationsaktion bestätigen' description='Diese Aktion wird direkt auf Twitch ausgeführt.' confirmLabel='Bestätigen' onCancel={()=>setConfirmOpen(false)} onConfirm={async()=>{setConfirmOpen(false); await run();}}/>
+  </div>; }
