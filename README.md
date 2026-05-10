@@ -645,6 +645,20 @@ Darum nutzt StreamForge pro Broadcaster/User-Kontext eine eigene EventSub-WebSoc
 
 Der Plattform-Bot wird dabei nicht als normaler Channel subscribed. Der Plattform-Bot ist Sender/Moderator und wird nicht automatisch als beobachteter Channel gestartet.
 
+## EventSub Fehler: maximum subscriptions with type and condition exceeded
+
+Ursache:
+- Bei Twitch existieren noch alte oder doppelte EventSub-Subscriptions für denselben Typ und dieselbe Bedingung.
+- Betroffen ist meist `channel.chat.message` bei Reconnects/duplizierten Sessions.
+
+Lösung:
+1. In **Admin Health** die Aktion **Cleanup EventSub Subscriptions** ausführen.
+2. Danach **Restart EventSub** oder pro Session **Restart Session** ausführen.
+
+Sicherheitsgrenze:
+- StreamForge löscht nur passende **WebSocket**-Subscriptions für denselben Channel/User-Kontext (`broadcaster_user_id` + `user_id`) und nur für `channel.chat.message`.
+- Fremde Subscription-Typen oder fremde Channel/User-Kontexte werden nicht gelöscht.
+
 
 ## ChatMessage-Dedupe Cleanup (vor `prisma db push`)
 

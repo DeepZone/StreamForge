@@ -103,6 +103,12 @@ export class TwitchConnectionManager {
 
   async stopAll() { if (this.reconcileTimer) clearInterval(this.reconcileTimer); this.reconcileTimer = null; await Promise.all(Array.from(this.sessions.values()).map((s) => s.stop('stop_all'))); this.sessions.clear(); this.sessionTransportKey.clear(); this.transports.forEach((t) => t.eventSub.stop()); this.transports.clear(); return { ok: true }; }
   async restartEventSub() { this.transports.forEach((t) => { t.eventSub.stop(); t.channelIds.forEach((id) => this.sessions.get(id)?.markReconnect()); t.eventSub.connect(); }); return { ok: true }; }
+  async cleanupSubscriptions(channelId?: string) {
+    const targets = channelId ? [this.sessions.get(channelId)].filter(Boolean) as TwitchChannelSession[] : Array.from(this.sessions.values());
+    const cleaned: any[] = [];
+    for (const session of targets) cleaned.push(await session.cleanupEventSubSubscriptions());
+    return { ok: true, cleaned };
+  }
 
   async startChannel(channelId: string) {
     const existing = this.sessions.get(channelId);

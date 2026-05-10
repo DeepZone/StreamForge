@@ -3,6 +3,14 @@ import { assertTwitchOAuthConfig, env } from '../config/env.js';
 export type TokenResponse = { access_token: string; refresh_token: string; expires_in: number; scope?: string[]; token_type: string };
 type TwitchUser = { id: string; login: string; display_name: string; profile_image_url: string };
 type TwitchChatter = { user_id: string; user_login: string; user_name: string };
+export type TwitchEventSubSubscription = {
+  id: string;
+  status: string;
+  type: string;
+  version: string;
+  condition?: Record<string, string>;
+  transport?: { method?: string; session_id?: string | null };
+};
 
 export class TwitchApiError extends Error {
   status: number;
@@ -80,14 +88,20 @@ export class TwitchApi {
     return this.parseResponse(res, 'create_eventsub_subscription');
   }
 
-  async deleteEventSubSubscription(subscriptionId: string, accessToken: string) {
-    const res = await fetch(`https://api.twitch.tv/helix/eventsub/subscriptions?id=${encodeURIComponent(subscriptionId)}`, { method: 'DELETE', headers: this.baseHeaders(accessToken) });
+  async deleteEventSubSubscription(params: { accessToken: string; subscriptionId: string }) {
+    const res = await fetch(`https://api.twitch.tv/helix/eventsub/subscriptions?id=${encodeURIComponent(params.subscriptionId)}`, { method: 'DELETE', headers: this.baseHeaders(params.accessToken) });
     if (!res.ok && res.status !== 204) await this.parseResponse(res, 'delete_eventsub_subscription');
   }
 
-  async getEventSubSubscriptions(accessToken: string) {
-    const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', { headers: this.baseHeaders(accessToken) });
-    return this.parseResponse(res, 'get_eventsub_subscriptions');
+  async listEventSubSubscriptions(params: { accessToken: string; type?: string; status?: string; userId?: string; after?: string; first?: number }) {
+    const url = new URL('https://api.twitch.tv/helix/eventsub/subscriptions');
+    if (params.type) url.searchParams.set('type', params.type);
+    if (params.status) url.searchParams.set('status', params.status);
+    if (params.userId) url.searchParams.set('user_id', params.userId);
+    if (params.after) url.searchParams.set('after', params.after);
+    if (typeof params.first === 'number') url.searchParams.set('first', String(Math.min(Math.max(params.first, 1), 100)));
+    const res = await fetch(url.toString(), { headers: this.baseHeaders(params.accessToken) });
+    return this.parseResponse<{ data: TwitchEventSubSubscription[]; pagination?: { cursor?: string | null } }>(res, 'list_eventsub_subscriptions');
   }
 
   async getChatters(params: { broadcasterId: string; moderatorId: string; accessToken: string; first?: number; after?: string }) {

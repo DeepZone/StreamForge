@@ -91,6 +91,15 @@ app.get('/api/admin/twitch/platform-bot/start', { preHandler: requireAuth }, asy
     await audit('admin_twitch_restart_eventsub', authed.session.id);
     return result;
   });
+  app.post('/api/admin/twitch/subscriptions/cleanup', { preHandler: requireAuth }, async (req, rep) => {
+    const authed = req as AuthedRequest;
+    if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
+    if (!ensureEnabled(rep)) return;
+    const body = (req.body ?? {}) as { channelId?: string };
+    const result = await twitchConnectionManager.cleanupSubscriptions(body.channelId);
+    await audit('admin_twitch_cleanup_subscriptions', authed.session.id, body.channelId);
+    return result;
+  });
   app.post('/api/admin/twitch/sessions/start-all', { preHandler: requireAuth }, async (req, rep) => {
     const authed = req as AuthedRequest;
     if (!isAdmin(authed.session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
