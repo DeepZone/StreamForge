@@ -758,3 +758,25 @@ BASE_URL=https://www.streamforge-bot.com EMAIL=owner@example.test PASSWORD='***'
 - Nach Scope-Erweiterungen muss der Streamer Twitch erneut verbinden, damit neue Scopes im Token enthalten sind.
 - Bitrate wird aktuell **nicht** erfunden: Twitch Helix liefert im verwendeten Endpunkt keine echte Stream-Bitrate, daher zeigt die UI `Bitrate: n/a`.
 - Der Status aktualisiert sich periodisch (30s Polling) und kann manuell aktualisiert werden.
+
+
+## Rollen und Oberflächen
+
+- `system_owner`: zentrale Plattformverwaltung (Admin-Dashboard), Benutzerverwaltung, Streamer-/Channel-Verwaltung, EventSub/Health.
+- `platform_admin`: technische/operative Plattformverwaltung (Admin-Bereiche ohne system_owner-only Benutzerverwaltung).
+- `channel_owner`: vollständiges Streamer-Dashboard für den eigenen Channel.
+- `channel_admin`: Channel-Verwaltung mit eingeschränkten operativen Rechten.
+- `channel_moderator`: Moderation/LiveChat-Fokus im Channel-Dashboard.
+- `viewer`: eingeschränkter Zugriff ohne Admin-Funktionen.
+
+## System User Dashboard
+
+System User (`system_owner`, `platform_admin`) landen nach Login im Bereich `/admin` statt im Streamer-Dashboard.
+
+Dort stehen bereit:
+- Benutzerverwaltung (`/admin/users`, nur `system_owner`)
+- Streamer-/Channel-Verwaltung (`/admin/streamers`)
+- Twitch/EventSub-Verwaltung (`/admin/twitch`)
+- Systemzustand (`/admin/health`)
+
+Streamer-spezifische Oberflächen wie LiveChat/Commands/Chatters bleiben im Channel-Dashboard unter `/dashboard/channels/:channelId/*` und werden für System User nicht als Standardansicht geladen.

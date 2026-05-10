@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { useNavigate } from 'react-router-dom';
+import { isSystemAdmin } from '../components/ProtectedRoute';
 import { apiBase, apiGet, apiPost } from '../api/client';
 
 export default function LoginPage() {
@@ -23,7 +24,10 @@ export default function LoginPage() {
         setError(`Login erfolgreich, aber keine Session aktiv. Prüfe Cookie-/HTTPS-Setup und API-Basis (${apiBase || 'same-origin /api'}).`);
         return;
       }
-      navigate('/channels', { replace: true });
+      if (isSystemAdmin(me.role)) navigate('/admin', { replace: true });
+      else if (!me.channels?.length) navigate('/setup', { replace: true });
+      else if (me.channels.length === 1) navigate(`/dashboard/channels/${me.channels[0].channelId}`, { replace: true });
+      else navigate('/dashboard/channels', { replace: true });
     } catch (err: any) {
       setError(err?.status === 401 ? 'E-Mail oder Passwort ist falsch.' : 'Login ist aktuell nicht erreichbar.');
     } finally { setLoading(false); }

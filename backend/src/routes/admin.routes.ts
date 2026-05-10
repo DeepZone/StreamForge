@@ -23,6 +23,54 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true, db: 'up', backend: 'up', twitch: { ...twitchHealth, sessions }, timerWorker: getTimerWorkerHealth() };
   });
 
+
+
+  app.get('/api/admin/overview', { preHandler: requireAuth }, async (req, rep) => {
+    if (!isAdmin((req as AuthedRequest).session.role as Role)) return rep.code(403).send({ error: 'forbidden' });
+    const [usersTotal, channelsTotal, activeChannels, bot, health] = await Promise.all([
+      prisma.user.count(),
+      prisma.channel.count(),
+      prisma.channel.count({ where: { isActive: true } }),
+      prisma.platformTwitchBot.findFirst({ orderBy: { updatedAt: 'desc' } }),
+      Promise.resolve(twitchConnectionManager.health())
+    ]);
+    const channelsWithErrors = health.sessions.filter((x: any) => x?.lastError).length;
+    return { usersTotal, channelsTotal, activeChannels, eventSubSessions: health.sessions.length, channelsWithErrors, platformBotConnected: Boolean(bot?.isActive) };
+  });
+
+  app.get('/api/admin/users', { preHandler: requireAuth }, async (req, rep) => {
+    const role = (req as AuthedRequest).session.role as Role;
+    if (role !== 'system_owner') return rep.code(403).send({ error: 'forbidden' });
+    const users = await prisma.user.findMany({ include: { members: true }, orderBy: { createdAt: 'desc' } });
+    return users.map((u) => ({ id: u.id, email: u.email, displayName: u.displayName, role: (u.members.find((m) => m.role === 'system_owner')?.role ?? u.members.find((m) => m.role === 'platform_admin')?.role ?? 'viewer'), createdAt: u.createdAt, updatedAt: u.updatedAt, channelRolesCount: u.members.length, lastLoginAt: null }));
+  });
+
+  app.post('/api/admin/users', { preHandler: requireAuth }, async (req: any, rep) => {
+    const role = (req as AuthedRequest).session.role as Role;
+    if (role !== 'system_owner') return rep.code(403).send({ error: 'forbidden' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const displayName = String(req.body?.displayName || '').trim();
+    const password = String(req.body?.password || '');
+    const newRole = String(req.body?.role || 'viewer') as Role;
+    if (!/^\S+@\S+\.\S+$/u.test(email)) return rep.code(400).send({ error: 'invalid_email' });
+    if (displayName.length < 2 || displayName.length > 64) return rep.code(400).send({ error: 'invalid_display_name' });
+    if (password.length < 12) return rep.code(400).send({ error: 'invalid_password' });
+    if (!['platform_admin','system_owner','viewer'].includes(newRole)) return rep.code(400).send({ error: 'invalid_role' });
+    const { hashPassword } = await import('../auth/password.js');
+    const created = await prisma.user.create({ data: { email, displayName, passwordHash: await hashPassword(password) } });
+    if (newRole !== 'viewer') await prisma.channelMember.create({ data: { userId: created.id, channelId: (await prisma.channel.findFirst({ select: { id: true } }))?.id || (await prisma.channel.create({ data: { twitchChannelId: `system-${created.id}`, twitchLogin: `system-${created.id}`, displayName: 'System Root' } })).id, role: newRole } });
+    return { id: created.id, email: created.email, displayName: created.displayName, role: newRole };
+  });
+
+  app.get('/api/admin/streamers', { preHandler: requireAuth }, async (req, rep) => {
+    const role = (req as AuthedRequest).session.role as Role;
+    if (!isAdmin(role)) return rep.code(403).send({ error: 'forbidden' });
+    const channels = await prisma.channel.findMany({ include: { members: { include: { user: true } }, tokens: true, botStatusLinks: true }, orderBy: { createdAt: 'desc' } });
+    const health = twitchConnectionManager.health();
+    const sessionByChannel = new Map((health.sessions || []).map((s: any) => [s.channelId, s]));
+    return channels.map((c) => ({ channelId: c.id, displayName: c.displayName, twitchLogin: c.twitchLogin, twitchChannelId: c.twitchChannelId, avatarUrl: c.avatarUrl, isActive: c.isActive, botEnabled: c.botEnabled, createdAt: c.createdAt, updatedAt: c.updatedAt, owner: c.members.find((m) => m.role === 'channel_owner') ? { userId: c.members.find((m) => m.role === 'channel_owner')!.userId, displayName: c.members.find((m) => m.role === 'channel_owner')!.user.displayName, email: c.members.find((m) => m.role === 'channel_owner')!.user.email } : null, roles: c.members.map((m) => ({ userId: m.userId, displayName: m.user.displayName, email: m.user.email, role: m.role })), twitchToken: c.tokens ? { present: true, expiresAt: c.tokens.expiresAt, scopes: JSON.parse(c.tokens.scopesJson || '[]') } : { present: false, expiresAt: null, scopes: [] }, eventSub: { status: sessionByChannel.get(c.id)?.status || 'unknown', subscribed: Boolean(sessionByChannel.get(c.id)), lastMessageAt: sessionByChannel.get(c.id)?.lastEventAt || null, lastError: sessionByChannel.get(c.id)?.lastError || null }, platformBot: { moderatorStatus: c.botStatusLinks[0]?.status || 'unknown', canSend: c.botStatusLinks[0]?.isModerator || false } }));
+  });
+
   const ensureEnabled = (rep: any) => {
     if (!env.twitchEventSubEnabled) {
       rep.code(409).send({ error: 'eventsub_disabled' });
