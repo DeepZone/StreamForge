@@ -4,7 +4,7 @@ import { decryptSecret, encryptSecret } from '../utils/crypto.js';
 import { BotCore } from '../core/BotCore.js';
 import { TenantContext } from '../core/TenantContext.js';
 import { eventBus } from '../core/EventBus.js';
-import { TwitchApi } from './TwitchApi.js';
+import { TwitchApi, TwitchEventSubSubscription } from './TwitchApi.js';
 import { recordChatMessage } from '../services/communityService.js';
 import { resolveChatSendAuth } from './chatSenderAuth.js';
 
@@ -24,6 +24,8 @@ export class TwitchChannelSession {
   private twitchLogin = '';
   private accessToken = '';
   private ownerTwitchId = '';
+  private lastCleanupAt: string | null = null;
+  private lastCleanupDeleted = 0;
 
   constructor(public channelId: string, private api: TwitchApi, private botCore: BotCore) {}
 
@@ -97,6 +99,13 @@ export class TwitchChannelSession {
     if (!['connected', 'subscribed'].includes(this.status)) await this.init();
     try {
       await this.validateAndLoadToken();
+      const preCleanup = await this.cleanupEventSubSubscriptions(sessionId);
+      if (preCleanup.keptCurrent) {
+        this.status = 'subscribed';
+        this.subscribedSessionId = sessionId;
+        this.lastSubscriptionAt = new Date().toISOString();
+        return this.getHealth();
+      }
       await this.api.createEventSubSubscription({ type: 'channel.chat.message', version: '1', condition: { broadcaster_user_id: this.channelTwitchId, user_id: this.ownerTwitchId }, sessionId, accessToken: this.accessToken });
       this.status = 'subscribed';
       this.subscribedSessionId = sessionId;
@@ -104,10 +113,77 @@ export class TwitchChannelSession {
       this.lastSubscriptionAt = new Date().toISOString();
       await this.logEvent('eventsub_subscription_created', { sessionId, subscriptionsCount: this.subscriptionsCount });
       } catch (e: any) {
-      this.status = e?.message?.includes('token') ? 'token_error' : 'error';
-      this.lastError = e?.message ?? 'subscription_failed';
+      const errorMessage = e?.message ?? 'subscription_failed';
+      if (String(errorMessage).includes('maximum subscriptions with type and condition exceeded')) {
+        await this.logEvent('eventsub_subscription_retry_after_cleanup', { sessionId });
+        try {
+          await this.cleanupEventSubSubscriptions(sessionId);
+          await this.api.createEventSubSubscription({ type: 'channel.chat.message', version: '1', condition: { broadcaster_user_id: this.channelTwitchId, user_id: this.ownerTwitchId }, sessionId, accessToken: this.accessToken });
+          this.status = 'subscribed';
+          this.subscribedSessionId = sessionId;
+          this.subscriptionsCount += 1;
+          this.lastSubscriptionAt = new Date().toISOString();
+          await this.logEvent('eventsub_subscription_retry_success', { sessionId, subscriptionsCount: this.subscriptionsCount });
+          return;
+        } catch (retryError: any) {
+          this.status = 'error';
+          this.lastError = retryError?.message ?? 'subscription_retry_failed';
+          await this.logEvent('eventsub_subscription_retry_failed', { error: this.lastError, status: retryError?.status ?? null });
+          await this.logEvent('eventsub_subscription_failed', { error: this.lastError, status: retryError?.status ?? null });
+          throw retryError;
+        }
+      }
+      this.status = errorMessage.includes('token') ? 'token_error' : 'error';
+      this.lastError = errorMessage;
       await this.logEvent('eventsub_subscription_failed', { error: this.lastError, status: e?.status ?? null });
       throw e;
+    }
+  }
+
+  private isMatchingEventSubSubscription(subscription: TwitchEventSubSubscription) {
+    const validStatuses = new Set(['enabled', 'websocket_disconnected', 'websocket_failed_ping_pong', 'notification_failures_exceeded', 'authorization_revoked', 'user_removed']);
+    return subscription.type === 'channel.chat.message'
+      && subscription.version === '1'
+      && validStatuses.has(subscription.status)
+      && subscription.condition?.broadcaster_user_id === this.channelTwitchId
+      && subscription.condition?.user_id === this.ownerTwitchId
+      && subscription.transport?.method === 'websocket';
+  }
+
+  async cleanupEventSubSubscriptions(currentSessionId?: string) {
+    const result = { channelId: this.channelId, twitchLogin: this.twitchLogin, matched: 0, deleted: 0, keptCurrent: 0, errors: [] as string[] };
+    await this.logEvent('eventsub_subscription_cleanup_begin', { currentSessionId: currentSessionId ?? null });
+    try {
+      await this.validateAndLoadToken();
+      const listed = await this.api.listEventSubSubscriptions({ accessToken: this.accessToken, type: 'channel.chat.message', first: 100 });
+      const matching = (listed.data ?? []).filter((sub) => this.isMatchingEventSubSubscription(sub));
+      result.matched = matching.length;
+      await this.logEvent('eventsub_subscription_cleanup_listed', { matched: result.matched });
+      for (const sub of matching) {
+        if (currentSessionId && sub.transport?.session_id === currentSessionId) {
+          result.keptCurrent += 1;
+          await this.logEvent('eventsub_subscription_cleanup_kept_current', { subscriptionId: sub.id });
+          continue;
+        }
+        try {
+          await this.api.deleteEventSubSubscription({ accessToken: this.accessToken, subscriptionId: sub.id });
+          result.deleted += 1;
+          await this.logEvent('eventsub_subscription_cleanup_deleted', { subscriptionId: sub.id });
+        } catch (e: any) {
+          const safeError = e?.safeMessage ?? e?.message ?? 'cleanup_delete_failed';
+          result.errors.push(safeError);
+          await this.logEvent('eventsub_subscription_cleanup_failed', { subscriptionId: sub.id, error: safeError, status: e?.status ?? null });
+        }
+      }
+      this.lastCleanupAt = new Date().toISOString();
+      this.lastCleanupDeleted = result.deleted;
+      return result;
+    } catch (e: any) {
+      const safeError = e?.safeMessage ?? e?.message ?? 'cleanup_failed';
+      result.errors.push(safeError);
+      await this.logEvent('eventsub_subscription_cleanup_failed', { error: safeError, status: e?.status ?? null });
+      this.lastCleanupAt = new Date().toISOString();
+      return result;
     }
   }
 
@@ -189,7 +265,7 @@ export class TwitchChannelSession {
   }
 
   getHealth() {
-    return { channelId: this.channelId, twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin, status: this.status, connected: ['connected', 'subscribed'].includes(this.status), subscribed: this.status === 'subscribed', subscribedSessionIdPresent: Boolean(this.subscribedSessionId), lastError: this.lastError, lastConnectedAt: this.lastConnectedAt, lastMessageAt: this.lastMessageAt, lastSubscriptionAt: this.lastSubscriptionAt, reconnectCount: this.reconnectCount, subscriptionsCount: this.subscriptionsCount, sendAs: 'unknown' };
+    return { channelId: this.channelId, twitchChannelId: this.channelTwitchId, twitchLogin: this.twitchLogin, status: this.status, connected: ['connected', 'subscribed'].includes(this.status), subscribed: this.status === 'subscribed', subscribedSessionIdPresent: Boolean(this.subscribedSessionId), lastError: this.lastError, lastConnectedAt: this.lastConnectedAt, lastMessageAt: this.lastMessageAt, lastSubscriptionAt: this.lastSubscriptionAt, reconnectCount: this.reconnectCount, subscriptionsCount: this.subscriptionsCount, sendAs: 'unknown', eventSubSubscriptions: { matchingCount: 0, currentSessionSubscription: this.status === 'subscribed' && Boolean(this.subscribedSessionId), staleCount: 0, lastCleanupAt: this.lastCleanupAt, lastCleanupDeleted: this.lastCleanupDeleted } };
   }
 
   getBroadcasterTwitchId() { return this.channelTwitchId; }
