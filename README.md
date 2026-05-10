@@ -170,6 +170,15 @@ curl -i --cookie cookies.txt --cookie-jar cookies.txt http://192.168.58.158:8000
 - Aktuell nutzbar (MVP): Dashboard-Übersicht, Commands CRUD, Timers CRUD, Campaigns CRUD, Community Radar, Recaps, Admin Health.
 - Noch MVP/Platzhalter mit Erklärung: Moderation, Integrationen, Settings.
 
+## Dashboard Bereiche
+
+- **LiveChat**: Zeigt Twitch-Nachrichten live per SSE, inklusive Verbindungsstatus und deduplizierter Anzeige für stabile Moderation im laufenden Stream.
+- **Chatters**: Listet aktive Chat-Teilnehmer mit Rolle, Aktivitätsdaten und schnellen Rollen-/Moderationsaktionen, soweit Twitch-Scopes verfügbar sind.
+- **Moderation**: Bietet aktive Bans/Timeouts, manuelle Moderationsaktionen und eine kompakte Historie als operativen Arbeitsbereich.
+- **Integrationen**: Trennt klar Plattform-Bot, Channel-Moderatorstatus, EventSub-/Live-Verbindung und Debug-Hinweise zur schnellen Diagnose.
+- **Admin Health**: Gibt Plattform-Admins einen strukturierten Überblick über API/DB/Redis sowie EventSub-Transporte und Session-Zustände.
+- **Settings**: Zentraler Bereich für Channel-Metadaten und Bot-Grundeinstellungen wie Prefix, Sprache und Zeitzone.
+
 ## Modern Dashboard (Frontend)
 
 Das Dashboard ist jetzt als dunkles SaaS-UI über `/channels` erreichbar.

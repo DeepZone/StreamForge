@@ -3,105 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiPost } from '../api/client';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ErrorBox from '../components/ui/ErrorBox';
+import LoadingState from '../components/ui/LoadingState';
 import PageHeader from '../components/ui/PageHeader';
 import StatusBadge from '../components/ui/StatusBadge';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
-
-function formatDateTime(value?: string | null) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString();
-}
-
-export default function IntegrationsPage() {
-  const { channelId = '' } = useParams();
-  const [data, setData] = useState<any>(null);
-  const [debug, setDebug] = useState<any>(null);
-  const [error, setError] = useState('');
-  const [debugError, setDebugError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const load = async () => {
-    setLoading(true);
-    setError('');
-    setDebugError('');
-    try {
-      const botData = await apiGet(`/api/channels/${channelId}/twitch/bot`);
-      setData(botData);
-    } catch {
-      setError('Integrationen konnten nicht geladen werden.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const debugData = await apiGet(`/api/channels/${channelId}/twitch/debug`);
-      setDebug(debugData);
-    } catch {
-      setDebug(null);
-      setDebugError('Debugdaten konnten nicht geladen werden.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (channelId) {
-      load();
-    }
-  }, [channelId]);
-
-  const eventSubStatus =
-    debug?.eventSub?.sessionStatus ??
-    debug?.eventSub?.status ??
-    debug?.session?.status ??
-    'unknown';
-
-  const subscribed =
-    debug?.eventSub?.subscribed ??
-    debug?.session?.subscribed ??
-    false;
-
-  const lastMessageAt =
-    debug?.eventSub?.lastMessageAt ??
-    debug?.session?.lastMessageAt ??
-    null;
-
-  const lastStoredMessageAt = debug?.chat?.lastStoredMessageAt ?? null;
-  const liveSubscribers = debug?.liveStream?.subscribers ?? 0;
-
-  return <div className='space-y-4'><PageHeader title='Integrationen' subtitle='Plattform-Bot und Twitch-Diagnose' />
-    {loading && <div className='text-sm text-zinc-300'>Integrationen werden geladen...</div>}
-    {error && <ErrorBox message={error} />}
-    {debugError && <ErrorBox message={debugError} />}
-    <Card className='p-4 space-y-2'>
-      <div>Plattform-Bot vorhanden: <StatusBadge status={data?.platformBotConnected ? 'connected' : 'disconnected'} /></div>
-      <div>Bot im Channel: <StatusBadge status={data?.moderatorStatus || 'unknown'} /></div>
-      <div>Bot sendefähig: <StatusBadge status={data?.canSendAsPlatformBot ? 'verified_moderator' : 'not_moderator'} /></div>
-      {data?.moderatorStatus === 'scope_missing' && <div className='text-amber-300 text-sm'>Scope fehlt. <Link to='/api/auth/twitch/start' className='underline'>Twitch erneut verbinden</Link></div>}
-      <div className='flex gap-2'>
-        <Button onClick={async () => { try { await apiPost(`/api/channels/${channelId}/twitch/bot/check`); await load(); } catch { await load(); } }}>Moderatorstatus prüfen</Button>
-        {data?.canAutoAddModerator && data?.moderatorStatus === 'not_moderator' && <Button onClick={() => setConfirmOpen(true)}>Bot automatisch hinzufügen</Button>}
-      </div>
-    </Card>
-    {debug && <Card className='p-4 space-y-2 text-sm'>
-      <div className='font-semibold'>Channel Debug</div>
-      <div>EventSub: {eventSubStatus || 'unknown'} / subscribed: {String(subscribed)}</div>
-      <div>Last Message At: {formatDateTime(lastMessageAt)}</div>
-      <div>Last Stored Message: {formatDateTime(lastStoredMessageAt)}</div>
-      <div>Live Stream Subscribers: {liveSubscribers}</div>
-    </Card>}
-    <ConfirmDialog open={confirmOpen} title='Bot als Moderator hinzufügen?' description='Diese Änderung wird direkt auf Twitch ausgeführt.' confirmLabel='Jetzt hinzufügen' onCancel={() => setConfirmOpen(false)} onConfirm={async () => {
-      setConfirmOpen(false);
-      try {
-        await apiPost(`/api/channels/${channelId}/twitch/bot/add-moderator`);
-        await load();
-      } catch {
-        setError('Bot konnte nicht automatisch hinzugefügt werden.');
-      }
-    }} />
-  </div>;
-}
+const f=(v:any)=>v?new Date(v).toLocaleString():'-'; const safe=(v:any)=>v===null||v===undefined||v===''?'-':String(v);
+export default function IntegrationsPage(){const {channelId=''}=useParams(); const [data,setData]=useState<any>(null); const [debug,setDebug]=useState<any>(null); const [error,setError]=useState(''); const [debugError,setDebugError]=useState(''); const [loading,setLoading]=useState(true); const [confirmOpen,setConfirmOpen]=useState(false);
+const load=async()=>{setLoading(true);setError('');setDebugError(''); try{setData(await apiGet(`/api/channels/${channelId}/twitch/bot`));}catch{setError('Integrationen konnten nicht geladen werden.');} try{setDebug(await apiGet(`/api/channels/${channelId}/twitch/debug`));}catch{setDebug(null);setDebugError('Debugdaten konnten nicht geladen werden.');} finally{setLoading(false);} }; useEffect(()=>{void load();},[channelId]);
+return <div className='space-y-4'><PageHeader title='Integrationen' subtitle='Plattform-Bot, Channel-Rechte und Twitch Live-Verbindung.'/>{loading&&<LoadingState label='Integrationen werden geladen…'/>}{error&&<ErrorBox message={error}/>}{debugError&&<ErrorBox message={debugError}/>}<Card className='p-4 space-y-2'><h2 className='font-semibold'>Plattform-Bot</h2><div>Bot vorhanden: <StatusBadge status={data?.platformBotConnected?'connected':'disconnected'} /></div><div>Botname: {safe(data?.platformBotLogin || data?.botLogin)}</div></Card><Card className='p-4 space-y-2'><h2 className='font-semibold'>Bot im Channel</h2><div>Moderatorstatus: <StatusBadge status={data?.moderatorStatus||'unknown'} /></div>{data?.moderatorStatus==='not_moderator'&&<div className='text-sm text-amber-300'>Bitte im Twitch-Chat ausführen: <code>/mod {safe(data?.platformBotLogin || 'BOTLOGIN')}</code></div>}{data?.moderatorStatus==='scope_missing'&&<div className='text-sm text-amber-300'>Bitte Twitch erneut verbinden. <Link to='/api/auth/twitch/start' className='underline'>Jetzt verbinden</Link></div>}<div className='flex gap-2'><Button onClick={async()=>{await apiPost(`/api/channels/${channelId}/twitch/bot/check`).finally(load);}}>Moderatorstatus prüfen</Button>{data?.canAutoAddModerator&&data?.moderatorStatus==='not_moderator'&&<Button onClick={()=>setConfirmOpen(true)}>Bot automatisch hinzufügen</Button>}</div></Card><Card className='p-4 space-y-2 text-sm'><h2 className='font-semibold'>Twitch EventSub / Live-Verbindung</h2><div>eventSub connected: <StatusBadge status={debug?.eventSub?.connected?'connected':'disconnected'} /></div><div>session subscribed: {String(Boolean(debug?.eventSub?.subscribed ?? debug?.session?.subscribed))}</div><div>lastMessageAt: {f(debug?.eventSub?.lastMessageAt ?? debug?.session?.lastMessageAt)}</div><div>liveStream subscribers: {safe(debug?.liveStream?.subscribers)}</div><div>lastPublishedAt: {f(debug?.liveStream?.lastPublishedAt)}</div></Card><Card className='p-4 space-y-2 text-sm'><h2 className='font-semibold'>Debug</h2><div>channel: {safe(debug?.channel?.id)}</div><div>session: {safe(debug?.session?.status)}</div><div>transport: {safe(debug?.eventSub?.transport)}</div></Card><ConfirmDialog open={confirmOpen} title='Bot automatisch als Moderator hinzufügen?' description='Diese Aktion wird direkt auf Twitch ausgeführt.' confirmLabel='Jetzt hinzufügen' onCancel={()=>setConfirmOpen(false)} onConfirm={async()=>{setConfirmOpen(false); await apiPost(`/api/channels/${channelId}/twitch/bot/add-moderator`).then(load).catch(()=>setError('Bot konnte nicht automatisch hinzugefügt werden.'));}}/></div>; }
