@@ -8,14 +8,75 @@ import PageHeader from '../components/ui/PageHeader';
 import StatusBadge from '../components/ui/StatusBadge';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 
+function formatDateTime(value?: string | null) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString();
+}
+
 export default function IntegrationsPage() {
   const { channelId = '' } = useParams();
-  const [data, setData] = useState<any>(null); const [error, setError] = useState(''); const [confirmOpen, setConfirmOpen] = useState(false);
+  const [data, setData] = useState<any>(null);
   const [debug, setDebug] = useState<any>(null);
-  const load = async () => { setError(''); setData(await apiGet(`/api/channels/${channelId}/twitch/bot`)); setDebug(await apiGet(`/api/channels/${channelId}/twitch/debug`)); };
-  useEffect(() => { if (channelId) load().catch(() => setError('Integrationen konnten nicht geladen werden.')); }, [channelId]);
+  const [error, setError] = useState('');
+  const [debugError, setDebugError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    setDebugError('');
+    try {
+      const botData = await apiGet(`/api/channels/${channelId}/twitch/bot`);
+      setData(botData);
+    } catch {
+      setError('Integrationen konnten nicht geladen werden.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const debugData = await apiGet(`/api/channels/${channelId}/twitch/debug`);
+      setDebug(debugData);
+    } catch {
+      setDebug(null);
+      setDebugError('Debugdaten konnten nicht geladen werden.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (channelId) {
+      load();
+    }
+  }, [channelId]);
+
+  const eventSubStatus =
+    debug?.eventSub?.sessionStatus ??
+    debug?.eventSub?.status ??
+    debug?.session?.status ??
+    'unknown';
+
+  const subscribed =
+    debug?.eventSub?.subscribed ??
+    debug?.session?.subscribed ??
+    false;
+
+  const lastMessageAt =
+    debug?.eventSub?.lastMessageAt ??
+    debug?.session?.lastMessageAt ??
+    null;
+
+  const lastStoredMessageAt = debug?.chat?.lastStoredMessageAt ?? null;
+  const liveSubscribers = debug?.liveStream?.subscribers ?? 0;
+
   return <div className='space-y-4'><PageHeader title='Integrationen' subtitle='Plattform-Bot und Twitch-Diagnose' />
+    {loading && <div className='text-sm text-zinc-300'>Integrationen werden geladen...</div>}
     {error && <ErrorBox message={error} />}
+    {debugError && <ErrorBox message={debugError} />}
     <Card className='p-4 space-y-2'>
       <div>Plattform-Bot vorhanden: <StatusBadge status={data?.platformBotConnected ? 'connected' : 'disconnected'} /></div>
       <div>Bot im Channel: <StatusBadge status={data?.moderatorStatus || 'unknown'} /></div>
@@ -28,11 +89,19 @@ export default function IntegrationsPage() {
     </Card>
     {debug && <Card className='p-4 space-y-2 text-sm'>
       <div className='font-semibold'>Channel Debug</div>
-      <div>EventSub: {debug.eventSub.sessionStatus || debug.eventSub.status} / subscribed: {String(debug.eventSub.subscribed)}</div>
-      <div>Last Message At: {debug.eventSub.lastMessageAt ? new Date(debug.eventSub.lastMessageAt).toLocaleString() : '-'}</div>
-      <div>Last Stored Message: {debug.chat.lastStoredMessageAt ? new Date(debug.chat.lastStoredMessageAt).toLocaleString() : '-'}</div>
-      <div>Live Stream Subscribers: {debug.liveStream.subscribers ?? 0}</div>
+      <div>EventSub: {eventSubStatus || 'unknown'} / subscribed: {String(subscribed)}</div>
+      <div>Last Message At: {formatDateTime(lastMessageAt)}</div>
+      <div>Last Stored Message: {formatDateTime(lastStoredMessageAt)}</div>
+      <div>Live Stream Subscribers: {liveSubscribers}</div>
     </Card>}
-    <ConfirmDialog open={confirmOpen} title='Bot als Moderator hinzufügen?' description='Diese Änderung wird direkt auf Twitch ausgeführt.' confirmLabel='Jetzt hinzufügen' onCancel={() => setConfirmOpen(false)} onConfirm={async () => { setConfirmOpen(false); await apiPost(`/api/channels/${channelId}/twitch/bot/add-moderator`); await load(); }} />
+    <ConfirmDialog open={confirmOpen} title='Bot als Moderator hinzufügen?' description='Diese Änderung wird direkt auf Twitch ausgeführt.' confirmLabel='Jetzt hinzufügen' onCancel={() => setConfirmOpen(false)} onConfirm={async () => {
+      setConfirmOpen(false);
+      try {
+        await apiPost(`/api/channels/${channelId}/twitch/bot/add-moderator`);
+        await load();
+      } catch {
+        setError('Bot konnte nicht automatisch hinzugefügt werden.');
+      }
+    }} />
   </div>;
 }
