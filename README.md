@@ -749,9 +749,10 @@ BASE_URL=https://www.streamforge-bot.com EMAIL=owner@example.test PASSWORD='***'
 - Recaps enthalten Summary, Kennzahlen, Top-Themen, häufige Fragen, Top-Viewer und Top-Commands.
 - Recaps können erstellt, gespeichert, gelistet und gelöscht werden.
 
-## Channel Statusstrip
+## Channel Statusleiste
 
-- Der Statusstrip im Channel-Dashboard zeigt Live-Status, Viewer, Titel, Kategorie, Laufzeit, EventSub-Status, Bot-Status und Bitrate-Hinweis.
+- Im Channel-Dashboard ersetzt die Statusleiste den oberen, dominanten „Channels“-Menüpunkt und sitzt am oberen Rand der Dashboard-Ansicht.
+- Die Statusleiste zeigt Live-Status, Viewer, Titel, Kategorie, Laufzeit, EventSub/Chat-Status, Bot-Status und Bitrate-Hinweis.
 - Live-Status und Zuschauer kommen aus Twitch Helix `Get Streams` (`/helix/streams`).
 - Subscriber-Zahlen benötigen den Scope `channel:read:subscriptions`. Falls der Scope fehlt, wird nur `Subs nicht verfügbar` angezeigt.
 - Nach Scope-Erweiterungen muss der Streamer Twitch erneut verbinden, damit neue Scopes im Token enthalten sind.

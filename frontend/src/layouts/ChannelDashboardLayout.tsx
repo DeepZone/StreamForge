@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useParams } from 'react-router-dom';
-import ChannelStatusStrip from '../components/ChannelStatusStrip';
 import { apiGet } from '../api/client';
 import { getChannelDisplayName, getChannelHandle, isFallbackChannelName, truncateId, type ChannelLike } from '../utils/channelDisplay';
 
@@ -33,5 +32,5 @@ export default function ChannelDashboardLayout({ children }: { children: React.R
   const handle = loading ? '' : getChannelHandle(channel);
   const showFallbackId = !loading && isFallbackChannelName(channel);
 
-  return <div className='grid md:grid-cols-[240px_1fr] gap-4'><aside className='rounded-xl border bg-zinc-900 p-4 h-fit sticky top-4'><div className='text-xs text-zinc-400'>Channel</div><div className='font-semibold mb-1'>{displayName}</div>{handle && <div className='text-xs text-zinc-400 mb-3'>{handle}</div>}{showFallbackId && <div className='text-xs text-zinc-500 mb-3'>ID: {truncateId(channel?.id || channelId)}</div>}{error && <div className='text-xs text-amber-400 mb-3'>Channel-Daten konnten nicht geladen werden.</div>}<div className='space-y-1'>{nav.map(([to, l]) => <NavLink end={!to} key={to || 'home'} to={`/dashboard/channels/${channelId}/${to}`} className={({ isActive }) => `block rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-indigo-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}>{l}</NavLink>)}</div><Link className='block mt-4 text-xs text-zinc-400 hover:text-zinc-200' to='/channels'>Channel wechseln</Link></aside><div className='space-y-3'><ChannelStatusStrip channelId={channelId}/><div>{children}</div></div></div>;
+  return <div className='grid md:grid-cols-[240px_1fr] gap-4'><aside className='rounded-xl border bg-zinc-900 p-4 h-fit sticky top-4'><div className='text-xs text-zinc-400'>Channel</div><div className='font-semibold mb-1'>{displayName}</div>{handle && <div className='text-xs text-zinc-400 mb-3'>{handle}</div>}{showFallbackId && <div className='text-xs text-zinc-500 mb-3'>ID: {truncateId(channel?.id || channelId)}</div>}{error && <div className='text-xs text-amber-400 mb-3'>Channel-Daten konnten nicht geladen werden.</div>}<div className='space-y-1'>{nav.map(([to, l]) => <NavLink end={!to} key={to || 'home'} to={`/dashboard/channels/${channelId}/${to}`} className={({ isActive }) => `block rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-indigo-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}>{l}</NavLink>)}</div><Link className='block mt-4 text-xs text-zinc-400 hover:text-zinc-200' to='/channels'>Channel wechseln</Link></aside><div>{children}</div></div>;
 }
