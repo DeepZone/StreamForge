@@ -780,4 +780,4 @@ Dort stehen bereit:
 - Systemzustand (`/admin/health`)
 
 Streamer-spezifische Oberflächen wie LiveChat/Commands/Chatters bleiben im Channel-Dashboard unter `/dashboard/channels/:channelId/*` und werden für System User nicht als Standardansicht geladen.
-> ☕ Gefällt dir dieses Projekt? [Unterstütze die Weiterentwicklung mit einem Kaffee.](https://buymeacoffee.com/mail9l)
+<a href="https://buymeacoffee.com/mail9l"><img alt="Buy Me a Coffee" src="https://img.shields.io/badge/Buy%20me%20a%20coffee-Unterst%C3%BCtzen-FFDD00?logo=buymeacoffee&logoColor=000000"></a>
