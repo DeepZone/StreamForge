@@ -1,5 +1,12 @@
 # StreamForge MVP
 
+<p align="center">
+  <img alt="Status MVP" src="https://img.shields.io/badge/Status-MVP-d97706">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white">
+  <img alt="Twitch Integration" src="https://img.shields.io/badge/Twitch-Integration-9146FF?logo=twitch&logoColor=white">
+  <a href="https://buymeacoffee.com/mail9l"><img alt="Buy Me a Coffee" src="https://img.shields.io/badge/Buy%20me%20a%20coffee-Unterst%C3%BCtzen-FFDD00?logo=buymeacoffee&logoColor=000000"></a>
+</p>
+
 ## Lokaler Start mit Docker Compose
 
 1. `.env.example` nach `.env` kopieren und lokale Werte setzen.
@@ -780,4 +787,3 @@ Dort stehen bereit:
 - Systemzustand (`/admin/health`)
 
 Streamer-spezifische Oberflächen wie LiveChat/Commands/Chatters bleiben im Channel-Dashboard unter `/dashboard/channels/:channelId/*` und werden für System User nicht als Standardansicht geladen.
-<a href="https://buymeacoffee.com/mail9l"><img alt="Buy Me a Coffee" src="https://img.shields.io/badge/Buy%20me%20a%20coffee-Unterst%C3%BCtzen-FFDD00?logo=buymeacoffee&logoColor=000000"></a>
